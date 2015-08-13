@@ -37,6 +37,14 @@ impl<T: any::Any + fmt::Debug + Copy> error::Error for Error<T> {
 /// Matches any item, returning it if present.
 ///
 /// If the buffer length is 0 this parser is considered incomplete.
+///
+/// ```
+/// use parser::{Error, Parser, any};
+///
+/// let p: Parser<_, _, _> = From::from(b"abc" as &[u8]);
+///
+/// assert_eq!(any(p).unwrap(), b'a');
+/// ```
 pub fn any<'a, I: 'a + Copy>(m: Empty<'a, I>) -> Parser<'a, I, I, Error<I>> {
     match m.0.first() {
         Some(&c) => Parser(&m.0[1..], State::Ok(c)),
@@ -47,6 +55,14 @@ pub fn any<'a, I: 'a + Copy>(m: Empty<'a, I>) -> Parser<'a, I, I, Error<I>> {
 /// Matches a single character, returning the matched character on success.
 ///
 /// If the buffer length is 0 this parser is considered incomplete.
+///
+/// ```
+/// use parser::{Error, Parser, char};
+///
+/// let p: Parser<_, _, _> = From::from(b"abc" as &[u8]);
+///
+/// assert_eq!(char(p, b'a').unwrap(), b'a');
+/// ```
 pub fn char<'a, I: 'a + Copy + Eq>(m: Empty<'a, I>, c: I) -> Parser<'a, I, I, Error<I>> {
     match m.0.first().map(|i| *i) {
         None              => Parser(m.0,       State::Incomplete(m.0)),
@@ -60,6 +76,14 @@ pub fn char<'a, I: 'a + Copy + Eq>(m: Empty<'a, I>, c: I) -> Parser<'a, I, I, Er
 /// 
 /// If no failure can be found the parser will be considered to be incomplete as there might be
 /// more input which needs to be matched. If zero items were matched an error will be returned.
+///
+/// ```
+/// use parser::{Error, Parser, take_while1};
+///
+/// let p: Parser<_, _, _> = From::from(b"abcdcba" as &[u8]);
+///
+/// assert_eq!(take_while1(p, |c| c == b'a' || c == b'b').unwrap(), b"ab");
+/// ```
 pub fn take_while1<'a, I: 'a + Copy, F>(m: Empty<'a, I>, f: F) -> Parser<'a, I, &'a [I], Error<I>>
   where F: Fn(I) -> bool {
     let Parser(buf, _) = m;
@@ -74,10 +98,10 @@ pub fn take_while1<'a, I: 'a + Copy, F>(m: Empty<'a, I>, f: F) -> Parser<'a, I, 
 #[cfg(test)]
 mod test {
     use ::{
-        bind,
-        ret,
         Parser,
         State,
+        bind,
+        ret,
     };
     use super::*;
 
@@ -91,6 +115,30 @@ mod test {
 
         assert_eq!(buf, b"b");
         assert_eq!(r, State::Ok(b'a'));
+    }
+
+    #[test]
+    fn test_char_fail() {
+        let b = "ab".as_bytes();
+
+        let m: Parser<_, _, _> = From::from(b);
+
+        let Parser(buf, r) = char(m, b'b');
+
+        assert_eq!(buf, b"ab");
+        assert_eq!(r, State::Err(b"ab", Error::Expected(b'b', b'a')));
+    }
+
+    #[test]
+    fn test_char_empty() {
+        let b = "".as_bytes();
+
+        let m: Parser<_, _, _> = From::from(b);
+
+        let Parser(buf, r) = char(m, b'b');
+
+        assert_eq!(buf, b"");
+        assert_eq!(r, State::Incomplete(b""));
     }
 
     #[test]
