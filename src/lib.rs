@@ -1,6 +1,6 @@
 use std::ops;
+use std::fmt;
 use std::iter::FromIterator;
-use std::cell::Cell;
 
 #[derive(Debug)]
 pub enum Error<T> {
@@ -20,7 +20,7 @@ impl<T> From<&'static str> for Error<T> {
 enum State<T, E> {
     Ok(T),
     Err(E),
-    Incomplete
+    Incomplete(usize)
 }
 
 use self::State::*;
@@ -29,9 +29,9 @@ impl<T, E> State<T, E> {
     fn map<F, U>(self, f: F) -> State<U, E>
       where F: FnOnce(T) -> U {
         match self {
-            Ok(t)      => Ok(f(t)),
-            Err(t)     => Err(t),
-            Incomplete => Incomplete,
+            Ok(t)         => Ok(f(t)),
+            Err(t)        => Err(t),
+            Incomplete(i) => Incomplete(i),
         }
     }
 
@@ -45,9 +45,9 @@ impl<T, E> State<T, E> {
     fn map_err<F, O>(self, f: F) -> State<T, O>
       where F: FnOnce(E) -> O {
         match self {
-            Ok(t)      => Ok(t),
-            Err(t)     => Err(f(t)),
-            Incomplete => Incomplete,
+            Ok(t)         => Ok(t),
+            Err(t)        => Err(f(t)),
+            Incomplete(i) => Incomplete(i),
         }
     }
 }
@@ -59,6 +59,7 @@ impl<T, E> State<T, E> {
 pub struct Parser<'a, I: 'a + Copy, T, E>(&'a [I], State<T, E>);
 
 impl<'a, I: Copy, E> Parser<'a, I, (), E> {
+    #[inline]
     pub fn new(i: &'a [I]) -> Self {
         Parser(i, Ok(()))
     }
@@ -68,6 +69,7 @@ impl<'a, I: Copy, E> Parser<'a, I, (), E> {
 impl<'a, I: 'a + Copy, T, E> Parser<'a, I, T, E> {
     /// Applies the function ``f`` on the internal value, replacing it with the return value of
     /// ``f`,  if parser is in successful state.
+    #[inline]
     pub fn map<F, U>(self, f: F) -> Parser<'a, I, U, E>
       where F: FnOnce(T) -> U {
         Parser(self.0, self.1.map(f))
@@ -90,18 +92,19 @@ impl<'a, I: 'a + Copy, T, E> Parser<'a, I, T, E> {
     ///
     /// assert_eq!(r.unwrap(), "This is a success!");
     /// ```
+    #[inline]
     pub fn bind<F, U, O>(self, f: F) -> Parser<'a, I, U, E>
       where E: From<O>,
             F: FnOnce(T, Parser<'a, I, (), E>) -> Parser<'a, I, U, O> {
         match self.1 {
-            Ok(s)      => {
+            Ok(s)         => {
                 let r = f(s, Parser(self.0, Ok(())));
 
                 // We rollback if the parser ``f`` failed
                 Parser(if r.1.is_good() { r.0 } else { self.0 }, r.1.map_err(From::from))
             },
-            Err(e)     => Parser(self.0, Err(e)),
-            Incomplete => Parser(self.0, Incomplete)
+            Err(e)        => Parser(self.0, Err(e)),
+            Incomplete(i) => Parser(self.0, Incomplete(i))
         }
     }
 
@@ -109,15 +112,18 @@ impl<'a, I: 'a + Copy, T, E> Parser<'a, I, T, E> {
     /// result, if any.
     ///
     /// Sugar for ``self.bind(|_, p| f(p))``.
+    #[inline]
     pub fn then<F, U>(self, f: F) -> Parser<'a, I, U, E>
       where F: FnOnce(Parser<'a, I, (), E>) -> Parser<'a, I, U, E> {
         self.bind(|_, p| f(p))
     }
 
+    #[inline]
     pub fn ret<U, O>(self, v: U) -> Parser<'a, I, U, O> {
         Parser(self.0, Ok(v))
     }
 
+    #[inline]
     pub fn err<O, U>(self, e: O) -> Parser<'a, I, U, O> {
         Parser(self.0, Err(e))
     }
@@ -126,6 +132,7 @@ impl<'a, I: 'a + Copy, T, E> Parser<'a, I, T, E> {
     /// ``f`` as long as it is ok, propagating the original value.
     /// 
     /// Sugar for ``self.bind(|r, p| f(p).bind(|_, p| p.ret(r)))``.
+    #[inline]
     pub fn skip<F, U>(self, f: F) -> Parser<'a, I, T, E>
       where F: FnOnce(Parser<'a, I, (), E>) -> Parser<'a, I, U, E> {
         self.bind(|r, p| f(p).bind(move |_, p| p.ret(r)))
@@ -134,7 +141,8 @@ impl<'a, I: 'a + Copy, T, E> Parser<'a, I, T, E> {
 
 // Getters
 // TODO: How to guarantee that they are not run on an error-state?
-// The () bound guarantees that it most likely is not run in one since then() is almost required.
+// Currently there is a bug if you do: ``parser.skip_while1(...).take_while(...)`` as the second
+// parser will overwrite the state of the former, so any error in skip_while will be ignored.
 impl<'a, I: 'a + Copy, E: From<Error<I>>> Parser<'a, I, (), E> {
     /// Ensures that at least ``n`` items are present and returns a slice of
     /// items from the current input.
@@ -142,16 +150,12 @@ impl<'a, I: 'a + Copy, E: From<Error<I>>> Parser<'a, I, (), E> {
         if self.0.len() >= n {
             Parser(self.0, Ok(&self.0[..n]))
         } else {
-            Parser(self.0, Incomplete)
+            Parser(self.0, Incomplete(self.0.len()))
         }
     }
 
     pub fn peek(self) -> Parser<'a, I, I, E> {
-        if self.0.len() > 0 {
-            Parser(self.0, Ok(self.0[0]))
-        } else {
-            Parser(self.0, Incomplete)
-        }
+        Parser(self.0, if self.0.len() > 0 { Ok(self.0[0]) } else { Incomplete(self.0.len()) })
     }
 
     pub fn get(self) -> Parser<'a, I, I, Error<I>> {
@@ -160,7 +164,7 @@ impl<'a, I: 'a + Copy, E: From<Error<I>>> Parser<'a, I, (), E> {
 
             Parser(r, Ok(d[0]))
         } else {
-            Parser(self.0, Incomplete)
+            Parser(self.0, Incomplete(self.0.len()))
         }
     }
 
@@ -172,10 +176,9 @@ impl<'a, I: 'a + Copy, E: From<Error<I>>> Parser<'a, I, (), E> {
       where F: FnOnce(I) -> bool {
         self.peek().bind(|v, p|
             if f(v) {
-                p.advance(1)
-                 .ret(v)
+                p.advance(1).ret(v)
             } else {
-                p.err(From::from(Error::DidNotSatisfy(v)))
+                p.err(Error::DidNotSatisfy(v))
             }
         )
     }
@@ -187,9 +190,40 @@ impl<'a, I: 'a + Copy, E: From<Error<I>>> Parser<'a, I, (), E> {
         match buf.iter().map(|c| *c).position(|c| f(c) == false) {
             Some(0) => Parser(buf, Err(From::from(Error::DidNotSatisfy(buf[0])))),
             Some(n) => Parser(&buf[n..], Ok(&buf[0..n])),
-            None    => Parser(buf, Incomplete),
+            None    => Parser(buf, Incomplete(buf.len())),
         }
     }
+
+    pub fn take_while<F>(self, f: F) -> Parser<'a, I, &'a [I], E>
+      where F: Fn(I) -> bool {
+        let Parser(buf, _) = self;
+
+        match buf.iter().map(|c| *c).position(|c| f(c) == false) {
+            Some(n) => Parser(&buf[n..], Ok(&buf[0..n])),
+            None    => Parser(buf, Incomplete(buf.len())),
+        }
+    }
+
+    pub fn take_till<F>(self, f: F) -> Parser<'a, I, &'a [I], E>
+      where F: Fn(I) -> bool {
+        let Parser(buf, _) = self;
+
+        match buf.iter().map(|c| *c).position(f) {
+            Some(n) => Parser(&buf[n..], Ok(&buf[0..n])),
+            None    => Parser(buf, Incomplete(buf.len())),
+        }
+    }
+}
+
+// Getters, with equality
+// TODO: How to guarantee that they are not run on an error-state?
+// The () bound guarantees that it most likely is not run in one since then() is almost required.
+impl<'a, I: 'a + Copy + Eq, E: From<Error<I>>> Parser<'a, I, (), E> {
+    pub fn char(self, c: I) -> Parser<'a, I, I, E> {
+        self.satisfy(|i| i == c)
+    }
+
+    // TODO: Sequence equality
 }
 
 // Skipping and buffer modifying methods
@@ -198,6 +232,11 @@ impl<'a, I: 'a + Copy, T, E: From<Error<I>>> Parser<'a, I, T, E> {
       where F: Fn(I) -> bool {
         self.skip(|p| p.take_while1(f))
     }
+
+    pub fn skip_while<F>(self, f: F) -> Parser<'a, I, T, E>
+      where F: Fn(I) -> bool {
+        self.skip(|p| p.take_while(f))
+    }
 }
 
 // Combinators with state
@@ -205,9 +244,9 @@ impl<'a, I: 'a + Copy, T, E> Parser<'a, I, T, E> {
     pub fn or<F>(self, f: F) -> Self
       where F: FnOnce(Parser<'a, I, (), E>) -> Parser<'a, I, T, E> {
         match self.1 {
-            Ok(_)      => self,
-            Err(_)     => f(Parser(self.0, Ok(()))),
-            Incomplete => self,
+            Ok(_)         => self,
+            Err(_)        => f(Parser(self.0, Ok(()))),
+            Incomplete(_) => self,
         }
     }
 }
@@ -219,108 +258,94 @@ impl<'a, 'b, I: 'a + Copy, E> Parser<'a, I, (), E> {
     pub fn many<F, T, U>(self, f: F) -> Parser<'a, I, T, E>
       where F: FnMut(Parser<'a, I, (), E>) -> Parser<'a, I, U, E>,
             T: FromIterator<U> {
-        let mut i = many::Iter::new(self.0, f);
+        let mut i = Iter::new(self.0, f);
 
         let r: T = FromIterator::from_iter(i.by_ref());
 
         match i.last_state() {
             // We haven't read everything yet
-            many::Good       => Parser(self.0, Incomplete),
+            Result::Good       => Parser(self.0, Incomplete(self.0.len())),
             // Ok, last parser failed, we have iterated all
-            many::Bad        => Parser(i.buffer(), Ok(r)),
+            Result::Bad        => Parser(i.buffer(), Ok(r)),
             // Nested parser incomplete, propagate
-            many::Incomplete => Parser(self.0, Incomplete),
+            Result::Incomplete => Parser(self.0, Incomplete(self.0.len())),
         }
     }
 }
 
-mod many {
-    use std::marker::PhantomData;
+use std::marker::PhantomData;
 
-    use super::Parser;
-    use super::State;
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Result {
+    Good,
+    Bad,
+    Incomplete,
+}
 
-    pub use self::Last::*;
+pub struct Iter<'a, I: 'a + Copy, U, E, F>
+  where F: FnMut(Parser<'a, I, (), E>) -> Parser<'a, I, U, E> {
+    /// Last resulting state
+    l: Result,
+    /// Current buffer
+    b: &'a [I],
+    f: F,
+    u: PhantomData<U>,
+    e: PhantomData<E>,
+}
 
-    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-    pub enum Last {
-        Good,
-        Bad,
-        Incomplete,
-    }
-
-    pub struct Iter<'a, I: 'a + Copy, U, E, F>
-      where F: FnMut(Parser<'a, I, (), E>) -> Parser<'a, I, U, E> {
-        /// Last resulting state
-        l: Last,
-        /// Current buffer
-        b: &'a [I],
-        f: F,
-        u: PhantomData<U>,
-        e: PhantomData<E>,
-    }
-
-    impl<'a, I: 'a + Copy, E, U, F> Iter<'a, I, U, E, F>
-      where F: FnMut(Parser<'a, I, (), E>) -> Parser<'a, I, U, E> {
-        pub fn new(buffer: &'a [I], f: F) -> Iter<'a, I, U, E, F> {
-            Iter{
-                l: Last::Good,
-                b: buffer,
-                f: f,
-                u: PhantomData,
-                e: PhantomData
-            }
-        }
-
-        pub fn last_state(&self) -> Last {
-            self.l
-        }
-
-        pub fn buffer(&self) -> &'a [I] {
-            self.b
+impl<'a, I: 'a + Copy, E, U, F> Iter<'a, I, U, E, F>
+  where F: FnMut(Parser<'a, I, (), E>) -> Parser<'a, I, U, E> {
+    pub fn new(buffer: &'a [I], f: F) -> Iter<'a, I, U, E, F> {
+        Iter{
+            l: Result::Good,
+            b: buffer,
+            f: f,
+            u: PhantomData,
+            e: PhantomData
         }
     }
 
-    impl<'a, I: 'a + Copy, E, U, F> Iterator for Iter<'a, I, U, E, F>
-      where F: FnMut(Parser<'a, I, (), E>) -> Parser<'a, I, U, E> {
-        type Item = U;
+    pub fn last_state(&self) -> Result {
+        self.l
+    }
 
-        fn next(&mut self) -> Option<Self::Item> {
-            if self.l != Last::Good {
-                return None
-            }
+    pub fn buffer(&self) -> &'a [I] {
+        self.b
+    }
+}
 
-            let Parser(b, r) = (self.f)(Parser(self.b, State::Ok(())));
+impl<'a, I: 'a + Copy, E, U, F> Iterator for Iter<'a, I, U, E, F>
+  where F: FnMut(Parser<'a, I, (), E>) -> Parser<'a, I, U, E> {
+    type Item = U;
 
-            match r {
-                State::Ok(v)      => {
-                    self.l = Last::Good;
-                    self.b = b;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.l != Result::Good {
+            return None
+        }
 
-                    Some(v)
-                },
-                State::Err(_)     => {
-                    self.l = Last::Bad;
+        let Parser(b, r) = (self.f)(Parser(self.b, State::Ok(())));
 
-                    None
-                },
-                State::Incomplete => {
-                    self.l = Last::Incomplete;
+        match r {
+            State::Ok(v)      => {
+                self.l = Result::Good;
+                self.b = b;
 
-                    None
-                },
-            }
+                Some(v)
+            },
+            State::Err(_)        => { self.l = Result::Bad;        None },
+            State::Incomplete(_) => { self.l = Result::Incomplete; None },
         }
     }
 }
 
 // State extractors
-impl<'a, I: 'a + Copy, T, E> Parser<'a, I, T, E> {
+impl<'a, I: 'a + Copy, T, E: fmt::Debug> Parser<'a, I, T, E> {
     // TODO: Is this actually useful?
     pub fn unwrap(self) -> T {
         match self.1 {
-            Ok(t) => t,
-            _     => panic!(),
+            Ok(t)         => t,
+            Err(e)        => panic!("Parser in error state: {:?}", e),
+            Incomplete(i) => panic!("Parser is incomplete, with {} items remaining", i),
         }
     }
 }
