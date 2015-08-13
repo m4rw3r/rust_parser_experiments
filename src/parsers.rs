@@ -1,0 +1,146 @@
+use ::{
+    Empty,
+    Parser,
+    State,
+};
+
+use std::fmt;
+use std::error;
+use std::any;
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum Error<T: Copy> {
+    /// Did not expect the given token.
+    Unexpected(T),
+    /// Expected the first token, got the second token instead.
+    Expected(T, T),
+}
+
+impl<T: fmt::Debug + Copy> fmt::Display for Error<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            &Error::Unexpected(t)  => write!(f, "unexpected '{:?}' while parsing", t),
+            &Error::Expected(e, a) => write!(f, "expected '{:?}', got '{:?}'", e, a),
+        }
+    }
+}
+
+impl<T: any::Any + fmt::Debug + Copy> error::Error for Error<T> {
+    fn description(&self) -> &str {
+        match self {
+            &Error::Unexpected(_)  => "An unexpected character was encountered",
+            &Error::Expected(_, _) => "Expected a certain character, got another",
+        }
+    }
+}
+
+/// Matches any item, returning it if present.
+///
+/// If the buffer length is 0 this parser is considered incomplete.
+pub fn any<'a, I: 'a + Copy>(m: Empty<'a, I>) -> Parser<'a, I, I, Error<I>> {
+    match m.0.first() {
+        Some(&c) => Parser(&m.0[1..], State::Ok(c)),
+        None     => Parser(m.0,       State::Incomplete(m.0)),
+    }
+}
+
+/// Matches a single character, returning the matched character on success.
+///
+/// If the buffer length is 0 this parser is considered incomplete.
+pub fn char<'a, I: 'a + Copy + Eq>(m: Empty<'a, I>, c: I) -> Parser<'a, I, I, Error<I>> {
+    match m.0.first().map(|i| *i) {
+        None              => Parser(m.0,       State::Incomplete(m.0)),
+        Some(i) if i == c => Parser(&m.0[1..], State::Ok(c)),
+        Some(i)           => Parser(m.0,       State::Err(m.0, Error::Expected(c, i))),
+    }
+}
+
+/// Matches all items until ``f`` returns false, if at least one item matched this parser succeeds
+/// and returns a slice of all the matched items.
+/// 
+/// If no failure can be found the parser will be considered to be incomplete as there might be
+/// more input which needs to be matched. If zero items were matched an error will be returned.
+pub fn take_while1<'a, I: 'a + Copy, F>(m: Empty<'a, I>, f: F) -> Parser<'a, I, &'a [I], Error<I>>
+  where F: Fn(I) -> bool {
+    let Parser(buf, _) = m;
+
+    match buf.iter().map(|c| *c).position(|c| f(c) == false) {
+        Some(0) => Parser(buf,       State::Err(buf, Error::Unexpected(buf[0]))),
+        Some(n) => Parser(&buf[n..], State::Ok(&buf[0..n])),
+        None    => Parser(buf,       State::Incomplete(buf)),
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use ::{
+        bind,
+        ret,
+        Parser,
+        State,
+    };
+    use super::*;
+
+    #[test]
+    fn test_char() {
+        let b = "ab".as_bytes();
+
+        let m: Parser<_, _, _> = From::from(b);
+
+        let Parser(buf, r) = char(m, b'a');
+
+        assert_eq!(buf, b"b");
+        assert_eq!(r, State::Ok(b'a'));
+    }
+
+    #[test]
+    fn parse_decimal() {
+        fn is_digit(c: u8) -> bool {
+            c >= b'0' && c <= b'9'
+        }
+
+        fn decimal<'a>(m: Parser<'a, u8, (), ()>) -> Parser<'a, u8, usize, Error<u8>> {
+            /*bytes <- take_while1 is_digit
+            ret bytes.iter().fold(0, |a, b| a * 10 + (b - b'0') as usize)
+
+            take_while1 is_digit >>= \bytes ->
+                ret bytes.iter().fold(0, |a, b| a * 10 + (b - b'0') as usize)*/
+
+            /*bind(take_while1(m, is_digit), |bytes|
+                return bytes.iter().fold(0, |a, b| a * 10 + (b - b'0') as usize))*/
+
+            bind(take_while1(m, is_digit), |m, bytes|
+                ret(m, bytes.iter().fold(0, |a, b| a * 10 + (b - b'0') as usize)))
+        }
+
+        /*let f_num = mdo!(
+            real <- decimal
+            b'.'
+            frac <- decimal
+            ret (real, frac)
+        );
+
+        decimal >>= \real ->
+            b'.' >>= \_ ->
+                decimal >>= (\frac ->
+                    return (real, frac)
+
+        bind(decimal, |real|
+            bind(b'.', |_|
+                bind(decimal, |frac|
+                    return (real, frac))))*/
+
+        let b = "123.4567 ".as_bytes();
+
+        let m: Parser<_, _, _> = From::from(b);
+
+        let Parser(buf, state) =
+            bind(decimal(m), |m, real|
+                bind(char(m, b'.'), |m, _| {
+                    bind(decimal(m), |m, frac|
+                        ret::<_, _, Error<u8>>(m, (real, frac)))}));
+
+        assert_eq!(buf, &[b' ']);
+        assert_eq!(state, State::Ok((123, 4567)));
+    }
+}
