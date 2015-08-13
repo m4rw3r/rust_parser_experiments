@@ -1,358 +1,380 @@
-pub trait Source<'a> {
-    fn get(&mut self) -> Option<u8>;
-    fn mark(&self) -> &'a [u8];
-    fn restore(&mut self, &'a [u8]);
+use std::ops;
+use std::iter::FromIterator;
+use std::cell::Cell;
+
+#[derive(Debug)]
+pub enum Error<T> {
+    DidNotSatisfy(T),
+    StrError(&'static str),
 }
 
-pub struct Slice<'a>(&'a [u8]);
+impl<T> From<&'static str> for Error<T> {
+    fn from(s: &'static str) -> Error<T> {
+        Error::StrError(s)
+    }
+}
 
-impl<'a> Source<'a> for Slice<'a> {
-    fn get(&mut self) -> Option<u8> {
-        if self.0.is_empty() {
-            None
-        } else {
-            let r = self.0[0];
+/// Internal 3-variant Result to also represent incomplete
+#[derive(Debug)]
+#[must_use]
+enum State<T, E> {
+    Ok(T),
+    Err(E),
+    Incomplete
+}
 
-            self.0 = &self.0[1..];
+use self::State::*;
 
-            Some(r)
+impl<T, E> State<T, E> {
+    fn map<F, U>(self, f: F) -> State<U, E>
+      where F: FnOnce(T) -> U {
+        match self {
+            Ok(t)      => Ok(f(t)),
+            Err(t)     => Err(t),
+            Incomplete => Incomplete,
         }
     }
 
-    fn mark(&self) -> &'a [u8] {
-        self.0
+    fn is_good(&self) -> bool {
+        match *self {
+            Ok(_) => true,
+            _     => false,
+        }
     }
 
-    fn restore(&mut self, m: &'a [u8]) {
-        self.0 = m
+    fn map_err<F, O>(self, f: F) -> State<T, O>
+      where F: FnOnce(E) -> O {
+        match self {
+            Ok(t)      => Ok(t),
+            Err(t)     => Err(f(t)),
+            Incomplete => Incomplete,
+        }
     }
 }
 
-pub trait Parser: Sized {
-    type Result;
+/// The main parser data-type, contains the current fragment to be parsed and the current
+/// parser-state.
+#[derive(Debug)]
+#[must_use]
+pub struct Parser<'a, I: 'a + Copy, T, E>(&'a [I], State<T, E>);
 
-    fn parse(&self, &mut Source) -> Option<Self::Result>;
-
-    fn or<O>(self, other: O) -> Or<Self, O, Self::Result>
-      where O: Parser<Result=Self::Result> {
-        Or(self, other)
+impl<'a, I: Copy, E> Parser<'a, I, (), E> {
+    pub fn new(i: &'a [I]) -> Self {
+        Parser(i, Ok(()))
     }
+}
 
-    fn and<O, F, R, T>(self, other: O, f: F) -> And<Self, O, F, Self::Result, R, T>
-      where O: Parser<Result=R>,
-            F: Fn(Self::Result, R) -> T {
-        And(self, other, f)
+// Functor
+impl<'a, I: 'a + Copy, T, E> Parser<'a, I, T, E> {
+    /// Applies the function ``f`` on the internal value, replacing it with the return value of
+    /// ``f`,  if parser is in successful state.
+    pub fn map<F, U>(self, f: F) -> Parser<'a, I, U, E>
+      where F: FnOnce(T) -> U {
+        Parser(self.0, self.1.map(f))
     }
+}
 
-    /// Runs ``O`` after ``self`` provided ``self`` succeeds, discarding the result of ``self``,
-    /// yielding the result of ``O``.
+// Monad
+impl<'a, I: 'a + Copy, T, E> Parser<'a, I, T, E> {
+    /// Executes ``f`` in the parser if the parser is in a success state, first parameter provided
+    /// to ``f`` is the current result and the second parameter is a parser instance to be used for
+    /// continued parsing and monadic chaining.
+    /// 
+    /// ```
+    /// let r = parser::from_slice("test".as_bytes())
+    ///     .get()
+    ///     .bind(|c, p| if c == b't' {
+    ///             p.ret("This is a success!")
+    ///         } else {
+    ///             p.err("FAIL") });
     ///
-    /// If parsing fails no input will be consumed.
-    fn then<O, R>(self, other: O) -> And<Self, O, fn(Self::Result, R) -> R, Self::Result, R, R>
-      where O: Parser<Result=R> {
-        /// Returns the second argument, discarding the first
-        fn snd<A, B>(_: A, b: B) -> B {
-            b
-        }
+    /// assert_eq!(r.unwrap(), "This is a success!");
+    /// ```
+    pub fn bind<F, U, O>(self, f: F) -> Parser<'a, I, U, E>
+      where E: From<O>,
+            F: FnOnce(T, Parser<'a, I, (), E>) -> Parser<'a, I, U, O> {
+        match self.1 {
+            Ok(s)      => {
+                let r = f(s, Parser(self.0, Ok(())));
 
-        And(self, other, snd::<Self::Result, R>)
-    }
-
-    fn map<F, U>(self, f: F) -> Apply<Self, Self::Result, F, U>
-      where F: Fn(Self::Result) -> U {
-        Apply(self, f)
-    }
-}
-
-/// Parser which succeeds on any input returning that input.
-#[derive(Debug, Clone, Copy)]
-pub struct Any;
-
-impl Parser for Any {
-    type Result = u8;
-
-    fn parse(&self, i: &mut Source) -> Option<Self::Result> {
-        i.get()
-    }
-}
-
-/// Parser which succeeds on a specific character, returning that character.
-#[derive(Debug, Clone, Copy)]
-pub struct Char(u8);
-
-impl Parser for Char {
-    type Result = u8;
-
-    fn parse(&self, i: &mut Source) -> Option<Self::Result> {
-        i.get().and_then(|c| if c == self.0 { Some(c) } else { None })
-    }
-}
-
-/// Parser which succeeds on a range of characters (inclusive), returning the matched character.
-#[derive(Debug, Clone, Copy)]
-pub struct Range(u8, u8);
-
-impl Parser for Range {
-    type Result = u8;
-
-    fn parse(&self, i: &mut Source) -> Option<Self::Result> {
-        i.get().and_then(|c| if self.0 <= c && c <= self.1 { Some(c) } else { None })
-    }
-}
-
-/// Parser which succeeds if the character is present in a supplied list, returning the matched character.
-#[derive(Debug, Clone, Copy)]
-pub struct OneOf<'a>(&'a [u8]);
-
-impl<'a> Parser for OneOf<'a> {
-    type Result = u8;
-
-    fn parse(&self, i: &mut Source) -> Option<Self::Result> {
-        i.get().and_then(|c| if let Some(_) = self.0.iter().position(|&p| p == c) { Some(c) } else { None })
-    }
-}
-
-/// Parser which fails if the nested parser succeeds, does not consume input,
-/// returning ``R`` upon success.
-#[derive(Debug, Clone, Copy)]
-pub struct Not<P, R>(P, R)
-  where P: Parser,
-        R: Clone + Sized;
-
-impl<P, R> Parser for Not<P, R>
-  where P: Parser, R: Clone + Sized {
-    type Result = R;
-
-    fn parse(&self, i: &mut Source) -> Option<Self::Result> {
-        let m = i.mark();
-        
-        match self.0.parse(i) {
-            Some(_) => {
-                i.restore(m);
-
-                None
+                // We rollback if the parser ``f`` failed
+                Parser(if r.1.is_good() { r.0 } else { self.0 }, r.1.map_err(From::from))
             },
-            None    => {
-                i.restore(m);
-
-                Some(self.1.clone())
-            }
+            Err(e)     => Parser(self.0, Err(e)),
+            Incomplete => Parser(self.0, Incomplete)
         }
     }
-}
 
-/// Parser which returns the result of the nested parser on success otherwise ``R``.
-#[derive(Debug, Clone, Copy)]
-pub struct Maybe<P, R>(P, R)
-  where P: Parser<Result=R>,
-        R: Clone + Sized;
-
-impl<P, R> Parser for Maybe<P, R>
-  where P: Parser<Result=R>,
-        R: Sized + Clone {
-    type Result = R;
-
-    fn parse(&self, i: &mut Source) -> Option<Self::Result> {
-        let m = i.mark();
-
-        match self.0.parse(i) {
-            Some(r) => Some(r),
-            None    => {
-                i.restore(m);
-
-                Some(self.1.clone())
-            }
-        }
+    /// Executes ``f`` in the parser if the parser is in a success-state, throwing away current
+    /// result, if any.
+    ///
+    /// Sugar for ``self.bind(|_, p| f(p))``.
+    pub fn then<F, U>(self, f: F) -> Parser<'a, I, U, E>
+      where F: FnOnce(Parser<'a, I, (), E>) -> Parser<'a, I, U, E> {
+        self.bind(|_, p| f(p))
     }
-}
 
-/// Parser which applies the function ``F`` on the result of the nested parser on success.
-#[derive(Debug, Clone, Copy)]
-pub struct Apply<P, R, F, U>(P, F)
-  where P: Parser<Result=R>,
-        F: Fn(R) -> U;
+    pub fn ret<U, O>(self, v: U) -> Parser<'a, I, U, O> {
+        Parser(self.0, Ok(v))
+    }
 
-impl<P, R, F, U> Parser for Apply<P, R, F, U>
-  where P: Parser<Result=R>,
-        F: Fn(R) -> U {
-    type Result = U;
+    pub fn err<O, U>(self, e: O) -> Parser<'a, I, U, O> {
+        Parser(self.0, Err(e))
+    }
     
-    fn parse(&self, i: &mut Source) -> Option<Self::Result> {
-        self.0.parse(i).map(&self.1)
+    /// Executes ``f`` in the parser if the parser is in a success state, ignoring the result of
+    /// ``f`` as long as it is ok, propagating the original value.
+    /// 
+    /// Sugar for ``self.bind(|r, p| f(p).bind(|_, p| p.ret(r)))``.
+    pub fn skip<F, U>(self, f: F) -> Parser<'a, I, T, E>
+      where F: FnOnce(Parser<'a, I, (), E>) -> Parser<'a, I, U, E> {
+        self.bind(|r, p| f(p).bind(move |_, p| p.ret(r)))
     }
 }
 
-/// Parser which attempts to parse ``P`` zero or more times, using the fold
-/// function ``F`` to accumulate data into the accumulator ``A``.
-#[derive(Debug, Clone, Copy)]
-pub struct Many<P, F, A, R>(P, F, A)
-  where P: Parser<Result=R>,
-        F: Fn(A, R) -> A,
-        A: Clone + Sized;
-
-impl<P, F, A, R> Parser for Many<P, F, A, R>
-  where P: Parser<Result=R>,
-        F: Fn(A, R) -> A,
-        A: Clone + Sized {
-    type Result = A;
-
-    fn parse(&self, i: &mut Source) -> Option<Self::Result> {
-        let mut r = self.2.clone();
-
-        loop {
-            let m = i.mark();
-
-            match self.0.parse(i) {
-                Some(v) => r = self.1(r, v),
-                None    => {
-                    i.restore(m);
-
-                    break;
-                }
-            }
-        }
-
-        Some(r)
-    }
-}
-
-/// Parser which attempts to parse ``P`` one or more times, using the fold
-/// function ``F`` to accumulate data into the accumulator ``A``.
-#[derive(Debug, Clone, Copy)]
-pub struct Many1<P, F, A, R>(P, F, A)
-  where P: Parser<Result=R>,
-        F: Fn(A, R) -> A,
-        A: Clone + Sized;
-
-impl<P, F, A, R> Parser for Many1<P, F, A, R>
-  where P: Parser<Result=R>,
-        F: Fn(A, R) -> A,
-        A: Clone + Sized {
-    type Result = A;
-
-    fn parse(&self, i: &mut Source) -> Option<Self::Result> {
-        let mut n = 0;
-        let mut r = self.2.clone();
-
-        loop {
-            let m = i.mark();
-
-            match self.0.parse(i) {
-                Some(v) => r = self.1(r, v),
-                None    => {
-                    i.restore(m);
-
-                    break;
-                }
-            }
-
-            n = n + 1;
-        }
-
-        if n > 0 {
-            Some(r)
+// Getters
+// TODO: How to guarantee that they are not run on an error-state?
+// The () bound guarantees that it most likely is not run in one since then() is almost required.
+impl<'a, I: 'a + Copy, E: From<Error<I>>> Parser<'a, I, (), E> {
+    /// Ensures that at least ``n`` items are present and returns a slice of
+    /// items from the current input.
+    fn ensure(self, n: usize) -> Parser<'a, I, &'a [I], E> {
+        if self.0.len() >= n {
+            Parser(self.0, Ok(&self.0[..n]))
         } else {
-            None
+            Parser(self.0, Incomplete)
         }
     }
-}
 
-/// Parser which attempts to parse ``P`` exactly ``usize`` times, using the fold
-/// function ``F`` to accumulate data into the accumulator ``A``.
-#[derive(Debug, Clone, Copy)]
-pub struct Count<P, F, A, R>(usize, P, F, A)
-  where P: Parser<Result=R>,
-        F: Fn(A, R) -> A,
-        A: Clone + Sized;
-
-impl<P, F, A, R> Parser for Count<P, F, A, R>
-  where P: Parser<Result=R>,
-        F: Fn(A, R) -> A,
-        A: Clone + Sized {
-    type Result = A;
-
-    fn parse(&self, i: &mut Source) -> Option<Self::Result> {
-        let mut n = 0;
-        let mut r = self.3.clone();
-
-        loop {
-            let m = i.mark();
-
-            match self.1.parse(i) {
-                Some(v) => r = self.2(r, v),
-                None    => {
-                    i.restore(m);
-
-                    break;
-                }
-            }
-
-            n = n + 1;
-        }
-
-        if n == self.0 {
-            Some(r)
+    pub fn peek(self) -> Parser<'a, I, I, E> {
+        if self.0.len() > 0 {
+            Parser(self.0, Ok(self.0[0]))
         } else {
-            None
+            Parser(self.0, Incomplete)
+        }
+    }
+
+    pub fn get(self) -> Parser<'a, I, I, Error<I>> {
+        if self.0.len() > 0 {
+            let (d, r) = self.0.split_at(1);
+
+            Parser(r, Ok(d[0]))
+        } else {
+            Parser(self.0, Incomplete)
+        }
+    }
+
+    fn advance(self, n: usize) -> Parser<'a, I, (), E> {
+        Parser(&self.0[n..], self.1)
+    }
+
+    pub fn satisfy<F>(self, f: F) -> Parser<'a, I, I, E>
+      where F: FnOnce(I) -> bool {
+        self.peek().bind(|v, p|
+            if f(v) {
+                p.advance(1)
+                 .ret(v)
+            } else {
+                p.err(From::from(Error::DidNotSatisfy(v)))
+            }
+        )
+    }
+
+    pub fn take_while1<F>(self, f: F) -> Parser<'a, I, &'a [I], E>
+      where F: Fn(I) -> bool {
+        let Parser(buf, _) = self;
+
+        match buf.iter().map(|c| *c).position(|c| f(c) == false) {
+            Some(0) => Parser(buf, Err(From::from(Error::DidNotSatisfy(buf[0])))),
+            Some(n) => Parser(&buf[n..], Ok(&buf[0..n])),
+            None    => Parser(buf, Incomplete),
         }
     }
 }
 
-/// Parser which first attempts ``A``, if ``A`` fails it will attempt ``B``. Returns the success
-/// value of the first succeeding parser, otherwise it fails.
-#[derive(Debug, Clone, Copy)]
-pub struct Or<A, B, R>(A, B)
-  where A: Parser<Result=R>,
-        B: Parser<Result=R>;
-
-impl<A, B, R> Parser for Or<A, B, R>
-  where A: Parser<Result=R>,
-        B: Parser<Result=R>{
-    type Result = R;
-
-    fn parse(&self, i: &mut Source) -> Option<Self::Result> {
-        let m = i.mark();
-
-        if let Some(x) = self.0.parse(i) {
-            return Some(x);
-        }
-
-        i.restore(m);
-
-        if let Some(x) = self.1.parse(i) {
-            return Some(x);
-        }
-
-        i.restore(m);
-
-        None
+// Skipping and buffer modifying methods
+impl<'a, I: 'a + Copy, T, E: From<Error<I>>> Parser<'a, I, T, E> {
+    pub fn skip_while1<F>(self, f: F) -> Parser<'a, I, T, E>
+      where F: Fn(I) -> bool {
+        self.skip(|p| p.take_while1(f))
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct And<A, B, F, R, S, T>(A, B, F)
-  where A: Parser<Result=R>,
-        B: Parser<Result=S>,
-        F: Fn(R, S) -> T;
+// Combinators with state
+impl<'a, I: 'a + Copy, T, E> Parser<'a, I, T, E> {
+    pub fn or<F>(self, f: F) -> Self
+      where F: FnOnce(Parser<'a, I, (), E>) -> Parser<'a, I, T, E> {
+        match self.1 {
+            Ok(_)      => self,
+            Err(_)     => f(Parser(self.0, Ok(()))),
+            Incomplete => self,
+        }
+    }
+}
 
-impl<A, B, F, R, S, T> Parser for And<A, B, F, R, S, T>
-  where A: Parser<Result=R>,
-        B: Parser<Result=S>,
-        F: Fn(R, S) -> T {
-    type Result = T;
+// Combinators without initial state
+// TODO: How to guarantee that they are not run on an error-state?
+// The () bound guarantees that it most likely is not run in one since then() is almost required.
+impl<'a, 'b, I: 'a + Copy, E> Parser<'a, I, (), E> {
+    pub fn many<F, T, U>(self, f: F) -> Parser<'a, I, T, E>
+      where F: FnMut(Parser<'a, I, (), E>) -> Parser<'a, I, U, E>,
+            T: FromIterator<U> {
+        let mut i = many::Iter::new(self.0, f);
 
-    fn parse(&self, i: &mut Source) -> Option<Self::Result> {
-        let m = i.mark();
+        let r: T = FromIterator::from_iter(i.by_ref());
 
-        if let Some(x) = self.0.parse(i) {
-            if let Some(y) = self.1.parse(i) {
-                return Some(self.2(x, y));
+        match i.last_state() {
+            // We haven't read everything yet
+            many::Good       => Parser(self.0, Incomplete),
+            // Ok, last parser failed, we have iterated all
+            many::Bad        => Parser(i.buffer(), Ok(r)),
+            // Nested parser incomplete, propagate
+            many::Incomplete => Parser(self.0, Incomplete),
+        }
+    }
+}
+
+mod many {
+    use std::marker::PhantomData;
+
+    use super::Parser;
+    use super::State;
+
+    pub use self::Last::*;
+
+    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+    pub enum Last {
+        Good,
+        Bad,
+        Incomplete,
+    }
+
+    pub struct Iter<'a, I: 'a + Copy, U, E, F>
+      where F: FnMut(Parser<'a, I, (), E>) -> Parser<'a, I, U, E> {
+        /// Last resulting state
+        l: Last,
+        /// Current buffer
+        b: &'a [I],
+        f: F,
+        u: PhantomData<U>,
+        e: PhantomData<E>,
+    }
+
+    impl<'a, I: 'a + Copy, E, U, F> Iter<'a, I, U, E, F>
+      where F: FnMut(Parser<'a, I, (), E>) -> Parser<'a, I, U, E> {
+        pub fn new(buffer: &'a [I], f: F) -> Iter<'a, I, U, E, F> {
+            Iter{
+                l: Last::Good,
+                b: buffer,
+                f: f,
+                u: PhantomData,
+                e: PhantomData
             }
         }
 
-        i.restore(m);
+        pub fn last_state(&self) -> Last {
+            self.l
+        }
 
-        None
+        pub fn buffer(&self) -> &'a [I] {
+            self.b
+        }
+    }
+
+    impl<'a, I: 'a + Copy, E, U, F> Iterator for Iter<'a, I, U, E, F>
+      where F: FnMut(Parser<'a, I, (), E>) -> Parser<'a, I, U, E> {
+        type Item = U;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.l != Last::Good {
+                return None
+            }
+
+            let Parser(b, r) = (self.f)(Parser(self.b, State::Ok(())));
+
+            match r {
+                State::Ok(v)      => {
+                    self.l = Last::Good;
+                    self.b = b;
+
+                    Some(v)
+                },
+                State::Err(_)     => {
+                    self.l = Last::Bad;
+
+                    None
+                },
+                State::Incomplete => {
+                    self.l = Last::Incomplete;
+
+                    None
+                },
+            }
+        }
+    }
+}
+
+// State extractors
+impl<'a, I: 'a + Copy, T, E> Parser<'a, I, T, E> {
+    // TODO: Is this actually useful?
+    pub fn unwrap(self) -> T {
+        match self.1 {
+            Ok(t) => t,
+            _     => panic!(),
+        }
+    }
+}
+
+// Syntactic sugar:
+
+/// * === fmap
+impl<'a, I: 'a + Copy, T, E, U, F> ops::Mul<F> for Parser<'a, I, T, E>
+  where F: FnOnce(T) -> U {
+    type Output = Parser<'a, I, U, E>;
+    
+    fn mul(self, rhs: F) -> Self::Output {
+        self.map(rhs)
+    }
+}
+
+/// << === bind
+impl<'a, I: 'a + Copy, T, E, U, F> ops::Shl<F> for Parser<'a, I, T, E>
+  where F: FnOnce(T, Parser<'a, I, (), E>) -> Parser<'a, I, U, E> {
+    type Output = Parser<'a, I, U, E>;
+
+    fn shl(self, rhs: F) -> Self::Output {
+        self.bind(rhs)
+    }
+}
+
+/// >> === then
+impl<'a, I: 'a + Copy, T, E, U, F> ops::Shr<F> for Parser<'a, I, T, E>
+  where F: FnOnce(Parser<'a, I, (), E>) -> Parser<'a, I, U, E> {
+    type Output = Parser<'a, I, U, E>;
+
+    fn shr(self, rhs: F) -> Self::Output {
+        self.then(rhs)
+    }
+}
+
+/// | === or
+impl<'a, I: 'a + Copy, T, E, F> ops::BitOr<F> for Parser<'a, I, T, E>
+  where F: FnOnce(Parser<'a, I, (), E>) -> Parser<'a, I, T, E> {
+    type Output = Parser<'a, I, T, E>;
+
+    fn bitor(self, rhs: F) -> Self::Output {
+        self.or(rhs)
+    }
+}
+
+pub fn from_slice<'a, I: 'a + Copy>(s: &'a [I]) -> Parser<'a, I, (), Error<I>> {
+    Parser(s, Ok(()))
+}
+
+impl<'a, I: 'a + Copy, E> From<&'a [I]> for Parser<'a, I, (), E> {
+    /// Creates a parser from a slice.
+    fn from(s: &'a [I]) -> Parser<'a, I, (), E> {
+        Parser(s, Ok(()))
     }
 }
 
@@ -360,108 +382,69 @@ impl<A, B, F, R, S, T> Parser for And<A, B, F, R, S, T>
 mod test {
     use super::*;
 
-    #[test]
-    fn test_slice_get() {
-        let mut s = Slice(b"abc");
+    fn ascii<'a>(p: Parser<'a, u8, (), Error<u8>>) -> Parser<'a, u8, u32, Error<u8>> {
+        p.satisfy(|c| c < 128).map(|c| c as u32)
+    }
 
-        assert_eq!(s.get(), Some(b'a'));
-        assert_eq!(s.get(), Some(b'b'));
-        assert_eq!(s.get(), Some(b'c'));
-        assert_eq!(s.get(), None);
+    fn trailing<'a>(a: u32, p: Parser<'a, u8, (), Error<u8>>) -> Parser<'a, u8, u32, Error<u8>> {
+        p.satisfy(|c| c & 0b11000000 == 0b10000000).map(|c| (a << 6) + (c & 0b00111111) as u32)
+    }
+
+    fn twobyte<'a>(p: Parser<'a, u8, (), Error<u8>>) -> Parser<'a, u8, u32, Error<u8>> {
+        p.satisfy(|c| c & 0b11100000 == 0b11000000) * (|c| (c & 0b00011111) as u32) << trailing
+        /*p.satisfy(|c| (c & 0b11100000) == 0b11000000).map(|c| (c & 0b000111111) as u32)
+         .bind(trailing)*/
+    }
+
+    fn threebyte<'a>(p: Parser<'a, u8, (), Error<u8>>) -> Parser<'a, u8, u32, Error<u8>> {
+        p.satisfy(|c| c & 0b11110000 == 0b1110000).map(|c| (c & 0b000111111) as u32)
+         .bind(trailing)
+         .bind(trailing)
+    }
+
+    fn parse_utf8<'a>(p: Parser<'a, u8, (), Error<u8>>) -> Parser<'a, u8, u32, Error<u8>> {
+        // p >> ascii | twobyte | threebyte
+        p.then(ascii)
+         .or(twobyte)
+         .or(threebyte)
+    }
+
+    fn parse_utf8_inline<'a>(p: Parser<'a, u8, (), Error<u8>>) -> Parser<'a, u8, u32, Error<u8>> {
+        p.satisfy(|c| c < 128).map(|c| c as u32)
+            .or(|p|
+                p.satisfy(|c| c & 0b11100000 == 0b11000000).map(|c| (c & 0b00011111) as u32).bind(|a, p|
+                    p.satisfy(|c| c & 0b11000000 == 0b10000000).map(|c| (a << 6) + (c & 0b00111111) as u32)))
+            .or(|p|
+                p.satisfy(|c| c & 0b11110000 == 0b1110000).map(|c| (c & 0b000111111) as u32).bind(|a, p|
+                    p.satisfy(|c| c & 0b11000000 == 0b10000000).map(|c| (a << 6) + (c & 0b00111111) as u32)).bind(|a, p|
+                        p.satisfy(|c| c & 0b11000000 == 0b10000000).map(|c| (a << 6) + (c & 0b00111111) as u32)))
+        /*let ascii = |p|
+            p.satisfy(|c| c < 128)
+             .map(|c| c as u32);
+        let tail = |a, p|
+            p.satisfy(|c| c & 0b11000000 == 0b10000000)
+             .map(|c| (a << 6) + (c & 0b00111111) as u32);
+        let twobyte = |p|
+            p.satisfy(|c| (c & 0b11100000) == 0b11000000)
+             .map(|c| (c & 0b000111111) as u32)
+             .bind(tail);
+        let threebyte = |p|
+            p.satisfy(|c| c & 0b11110000 == 0b1110000)
+             .map(|c| (c & 0b000111111) as u32)
+             .bind(tail)
+             .bind(tail);
+
+        ascii(p)
+         .or(twobyte)
+         .or(threebyte)*/
     }
 
     #[test]
-    fn test_any_empty() {
-        let mut s = Slice(b"");
+    fn test_utf8() {
+        let data = "ä-123".as_bytes();
 
-        assert_eq!(Any.parse(&mut s), None);
-        assert_eq!(Any.parse(&mut s), None);
-    }
+        let p = Parser::new(data);
 
-    #[test]
-    fn test_any() {
-        let mut s = Slice(b"a");
-
-        assert_eq!(Any.parse(&mut s), Some(b'a'));
-        assert_eq!(Any.parse(&mut s), None);
-    }
-
-    #[test]
-    fn test_parse_integer() {
-        let mut s  = Slice(b"31415 ");
-        let mut s2 = Slice(b" 31415 "); // should fail
-
-        let p = Many1(Range(b'0', b'9'), |a: usize, x| a * 10 + (x - b'0') as usize, 0);
-
-        assert_eq!(p.parse(&mut s2), None);
-        assert_eq!(s2.get(), Some(b' '));
-        assert_eq!(s2.get(), Some(b'3'));
-
-        assert_eq!(p.parse(&mut s), Some(31415));
-        assert_eq!(s.get(), Some(b' '));
-    }
-
-    #[test]
-    fn test_or() {
-        let mut s = Slice(b"123");
-
-        let p = Char(b'1').or(Char(b'2'));
-
-        assert_eq!(p.parse(&mut s), Some(b'1'));
-        assert_eq!(p.parse(&mut s), Some(b'2'));
-        assert_eq!(p.parse(&mut s), None);
-        assert_eq!(s.get(), Some(b'3'));
-    }
-
-    #[test]
-    fn test_neg_int() {
-        let mut s  = Slice(b"123");
-        let mut s2 = Slice(b"+123");
-        let mut s3 = Slice(b"-123");
-        let mut e  = Slice(b"-foo");
-
-        fn num_accum(a: i32, x: u8) -> i32 {
-            a * 10 + (x - b'0') as i32
-        }
-
-        let int = Many1(Range(b'0', b'9'), num_accum, 0);
-
-        let plus  = Char(b'+').then(int);
-        let minus = Char(b'-').and(int, |_, i| -i);
-        let p     = plus.or(minus).or(int);
-
-        assert_eq!(p.parse(&mut s), Some(123));
-        assert_eq!(p.parse(&mut s2), Some(123));
-        assert_eq!(p.parse(&mut s3), Some(-123));
-        assert_eq!(p.parse(&mut e), None);
-        assert_eq!(e.get(), Some(b'-'));
-    }
-
-    #[test]
-    fn test_unicode() {
-        let mut s = Slice("åäfÖ".as_bytes());
-
-        fn sum(s: u32, c: u32) -> u32 {
-            (s << 6) + c
-        }
-
-        fn chr(c: u8) -> u32 {
-            (c & 0x3f) as u32
-        }
-
-        let tail   = Range(0b10000000, 0b10111111).map(chr);
-
-        let ascii  = Range(0b00000000, 0b01111111).map(|c| c as u32);
-
-        let mone   = Range(0b11000000, 0b11011111).map(|c| (c & 0b00011111) as u32).and(tail, sum);
-        let mtwo   = Range(0b11100000, 0b11101111).map(|c| (c & 0b00001111) as u32).and(Count(2, tail, sum, 0), sum);
-        let mthree = Range(0b11110000, 0b11110111).map(|c| (c & 0b00000111) as u32).and(Count(3, tail, sum, 0), sum);
-
-        let utf8 = ascii.or(mone).or(mtwo).or(mthree);
-
-        assert_eq!(utf8.parse(&mut s), Some(229)); // å
-        assert_eq!(utf8.parse(&mut s), Some(228)); // ä
-        assert_eq!(utf8.parse(&mut s), Some(102)); // f
-        assert_eq!(utf8.parse(&mut s), Some(214)); // Ö
+        assert_eq!(parse_utf8(p).unwrap(), 0xe4);
     }
 }
