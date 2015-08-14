@@ -1,3 +1,5 @@
+//! Provided parsers.
+
 use ::{
     Empty,
     Error,

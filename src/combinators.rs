@@ -1,3 +1,5 @@
+//! Provided combinators
+
 use std::iter::FromIterator;
 
 use ::{

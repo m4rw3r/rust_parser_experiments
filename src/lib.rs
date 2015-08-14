@@ -1,7 +1,7 @@
-mod combinators;
+pub mod combinators;
 mod iter;
 mod mdo;
-mod parsers;
+pub mod parsers;
 
 use std::error;
 use std::fmt;
@@ -134,7 +134,7 @@ impl<'a, I: 'a + Copy + fmt::Debug, T, E: error::Error> Parser<'a, I, T, E> {
     }
 }
 
-mod functor {
+pub mod functor {
     use ::Parser;
 
     impl<'a, I: 'a + Copy, T, E> Parser<'a, I, T, E> {
@@ -172,7 +172,7 @@ mod functor {
     }
 }
 
-mod monad {
+pub mod monad {
     use ::Empty;
     use ::State;
     use ::Parser;
