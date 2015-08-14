@@ -28,6 +28,7 @@ pub use monad::{
 };
 
 pub use parsers::{
+    satisfy,
     any,
     char,
     take,
@@ -39,6 +40,8 @@ pub use parsers::{
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Error<T: Copy> {
+    /// Token did not satisfy the given expression.
+    NotSatisfy(T),
     /// Did not expect the given token.
     Unexpected(T),
     /// Expected the first token, got the second token instead.
@@ -53,6 +56,7 @@ pub enum Error<T: Copy> {
 impl<T: fmt::Debug + Copy> fmt::Display for Error<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
+            &Error::NotSatisfy(t)  => write!(f, "'{:?}' did not satisfy condition", t),
             &Error::Unexpected(t)  => write!(f, "unexpected '{:?}' while parsing", t),
             &Error::Expected(e, a) => write!(f, "expected '{:?}', got '{:?}'", e, a),
             &Error::NotExpect(e)   => write!(f, "expected anything but '{:?}', got {:?}", e, e),
@@ -64,6 +68,7 @@ impl<T: fmt::Debug + Copy> fmt::Display for Error<T> {
 impl<T: any::Any + fmt::Debug + Copy> error::Error for Error<T> {
     fn description(&self) -> &str {
         match self {
+            &Error::NotSatisfy(_)  => "The encountered item did not satisfy an expression",
             &Error::Unexpected(_)  => "An unexpected character was encountered",
             &Error::Expected(_, _) => "Expected a certain character, got another",
             &Error::NotExpect(_)   => "Expected any character but one, got the one",

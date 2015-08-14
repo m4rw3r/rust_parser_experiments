@@ -7,12 +7,34 @@ use ::{
     State,
 };
 
+/// Matches an item using ``f``, the item is returned if ``f`` yields true, otherwise this parser
+/// fails.
+///
+/// If the buffer length is 0 this parser is considered incomplete.
+/// 
+/// ```
+/// use parser::{Parser, satisfy};
+/// 
+/// let p: Parser<_, _, _> = From::from(b"abc");
+/// 
+/// assert_eq!(satisfy(p, |c| c == b'a').unwrap(), b'a');
+/// ```
+#[inline]
+pub fn satisfy<'a, I: 'a + Copy, F>(m: Empty<'a, I>, f: F) -> Parser<'a, I, I, Error<I>>
+  where F: FnOnce(I) -> bool {
+    match m.0.first() {
+        None             => Parser(m.0,                 State::Incomplete(m.0, 1)),
+        Some(&c) if f(c) => Parser(&m.0[1..],           State::Ok(c)),
+        Some(&c)         => Parser(m.0, State::Err(m.0, Error::NotSatisfy(c))),
+    }
+}
+
 /// Matches any item, returning it if present.
 ///
 /// If the buffer length is 0 this parser is considered incomplete.
 ///
 /// ```
-/// use parser::{Error, Parser, any};
+/// use parser::{Parser, any};
 ///
 /// let p: Parser<_, _, _> = From::from(b"abc");
 ///
@@ -20,10 +42,7 @@ use ::{
 /// ```
 #[inline]
 pub fn any<'a, I: 'a + Copy>(m: Empty<'a, I>) -> Parser<'a, I, I, Error<I>> {
-    match m.0.first() {
-        Some(&c) => Parser(&m.0[1..], State::Ok(c)),
-        None     => Parser(m.0,       State::Incomplete(m.0, 1)),
-    }
+    satisfy(m, |_| true)
 }
 
 /// Matches an item as long as it is not equal to ``c``.
@@ -31,7 +50,7 @@ pub fn any<'a, I: 'a + Copy>(m: Empty<'a, I>) -> Parser<'a, I, I, Error<I>> {
 /// If the buffer length is 0 this parser is considered incomplete.
 /// 
 /// ```
-/// use parser::{Error, Parser, not_char};
+/// use parser::{Parser, not_char};
 /// 
 /// let p: Parser<_, _, _> = From::from(b"abc");
 /// 
@@ -39,11 +58,7 @@ pub fn any<'a, I: 'a + Copy>(m: Empty<'a, I>) -> Parser<'a, I, I, Error<I>> {
 /// ```
 #[inline]
 pub fn not_char<'a, I: 'a + Copy + Eq>(m: Empty<'a, I>, c: I) -> Parser<'a, I, I, Error<I>> {
-    match m.0.first() {
-        Some(&i) if i != c => Parser(&m.0[1..], State::Ok(i)),
-        Some(&i)           => Parser(m.0,       State::Err(m.0, Error::NotExpect(i))),
-        None               => Parser(m.0,       State::Incomplete(m.0, 1)),
-    }
+    satisfy(m, |i| i != c)
 }
 
 /// Matches a single character, returning the matched character on success.
@@ -59,11 +74,8 @@ pub fn not_char<'a, I: 'a + Copy + Eq>(m: Empty<'a, I>, c: I) -> Parser<'a, I, I
 /// ```
 #[inline]
 pub fn char<'a, I: 'a + Copy + Eq>(m: Empty<'a, I>, c: I) -> Parser<'a, I, I, Error<I>> {
-    match m.0.first().map(|i| *i) {
-        None              => Parser(m.0,       State::Incomplete(m.0, 1)),
-        Some(i) if i == c => Parser(&m.0[1..], State::Ok(c)),
-        Some(i)           => Parser(m.0,       State::Err(m.0, Error::Expected(c, i))),
-    }
+    // TODO: Expand on the error with expected character
+    satisfy(m, |i| i == c)
 }
 
 /// Matches ``num`` items no matter what they are, returning a slice of the matched items.
@@ -202,7 +214,9 @@ mod test {
         let Parser(buf, r) = char(m, b'b');
 
         assert_eq!(buf, b"ab");
-        assert_eq!(r, State::Err(b"ab", Error::Expected(b'b', b'a')));
+        // TODO: Enable a more detailed error
+        // assert_eq!(r, State::Err(b"ab", Error::Expected(b'b', b'a')));
+        assert_eq!(r, State::Err(b"ab", Error::NotSatisfy(b'a')));
     }
 
     #[test]
