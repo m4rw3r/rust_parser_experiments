@@ -82,7 +82,7 @@ impl<'a, I: 'a + Copy, T, E> Parser<'a, I, T, E> {
     /// ```
     /// use parser::{Error, Parser, ret};
     /// 
-    /// let p: Parser<_, usize, Error<()>> = ret(From::from(b"dummy" as &[u8]), 1234);
+    /// let p: Parser<_, usize, Error<()>> = ret(From::from(b"dummy"), 1234);
     /// 
     /// assert_eq!(p.map(|i| i + 20).unwrap(), 1254);
     /// ```
@@ -99,7 +99,7 @@ impl<'a, I: 'a + Copy, T, E> Parser<'a, I, T, E> {
 /// ```
 /// use parser::{Error, Parser, map, ret};
 /// 
-/// let p: Parser<_, usize, Error<()>> = ret(From::from(b"dummy" as &[u8]), 1234);
+/// let p: Parser<_, usize, Error<()>> = ret(From::from(b"dummy"), 1234);
 /// 
 /// assert_eq!(map(p, |i| i + 20).unwrap(), 1254);
 /// ```
@@ -143,10 +143,25 @@ pub fn err<'a, I: 'a + Copy, T, E>(m: Empty<'a, I>, err: E) -> Parser<'a, I, T, 
 }
 
 /// Constructs a parser monad for parsing the data in the buffer supplied to ``From::from()``.
+/// 
+/// ```
+/// use parser::{Parser, take};
+/// 
+/// let mut v = Vec::new();
+/// 
+/// v.push(b'a');
+/// v.push(b'b');
+/// 
+/// let p = From::from(&v);
+/// 
+/// assert_eq!(take(p, 2).unwrap(), b"ab");
+/// ```
 #[inline]
-impl<'a, I: 'a + Copy> From<&'a [I]> for Empty<'a, I> {
-    fn from(buf: &'a [I]) -> Empty<'a, I> {
-        Parser(buf, State::Ok(()))
+impl<'a, I, R> From<&'a R> for Empty<'a, I>
+  where I: 'a + Copy,
+        R: 'a + AsRef<[I]>{
+    fn from(buf: &'a R) -> Empty<'a, I> {
+        Parser(buf.as_ref(), State::Ok(()))
     }
 }
 
@@ -173,7 +188,7 @@ mod test {
 
     #[test]
     fn test_ret() {
-        let Parser(buf, d) = ret::<_, usize, usize>(From::from(&b"abc"[..]), 123);
+        let Parser(buf, d) = ret::<_, usize, usize>(From::from(b"abc"), 123);
 
         assert_eq!(buf, b"abc");
         assert_eq!(d, State::Ok(123));
@@ -181,7 +196,7 @@ mod test {
 
     #[test]
     fn test_err() {
-        let Parser(buf, d) = err::<_, usize, usize>(From::from(&b"abc"[..]), 123);
+        let Parser(buf, d) = err::<_, usize, usize>(From::from(b"abc"), 123);
 
         assert_eq!(buf, b"abc");
         assert_eq!(d, State::Err(b"abc", 123));

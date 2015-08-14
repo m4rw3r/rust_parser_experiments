@@ -9,7 +9,7 @@
 /// fn main() {
 ///     use parser::{Parser, bind, ret, char, any, Error};
 ///
-///     let m = From::from(b"a:b" as &[u8]);
+///     let m = From::from(b"a:b");
 ///
 ///     let r: Parser<_, (u8, u8), parser::Error<_>> = mdo!{m,
 ///         first  = any;
@@ -96,7 +96,7 @@ mod test {
             }
         }
 
-        let m = From::from(b"123.4567 " as &[u8]);
+        let m = From::from(b"123.4567 ");
 
         let Parser(buf, state) = mdo!(m,
             real = decimal;

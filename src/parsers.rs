@@ -45,7 +45,7 @@ impl<T: any::Any + fmt::Debug + Copy> error::Error for Error<T> {
 /// ```
 /// use parser::{Error, Parser, any};
 ///
-/// let p: Parser<_, _, _> = From::from(b"abc" as &[u8]);
+/// let p: Parser<_, _, _> = From::from(b"abc");
 ///
 /// assert_eq!(any(p).unwrap(), b'a');
 /// ```
@@ -84,7 +84,7 @@ pub fn not_char<'a, I: 'a + Copy + Eq>(m: Empty<'a, I>, c: I) -> Parser<'a, I, I
 /// ```
 /// use parser::{Error, Parser, char};
 ///
-/// let p: Parser<_, _, _> = From::from(b"abc" as &[u8]);
+/// let p: Parser<_, _, _> = From::from(b"abc");
 ///
 /// assert_eq!(char(p, b'a').unwrap(), b'a');
 /// ```
@@ -126,7 +126,7 @@ pub fn take<'a, I: 'a + Copy>(m: Empty<'a, I>, num: usize) -> Parser<'a, I, &'a 
 /// ```
 /// use parser::{Error, Parser, take_while1};
 ///
-/// let p: Parser<_, _, _> = From::from(b"abcdcba" as &[u8]);
+/// let p: Parser<_, _, _> = From::from(b"abcdcba");
 ///
 /// assert_eq!(take_while1(p, |c| c == b'a' || c == b'b').unwrap(), b"ab");
 /// ```
@@ -156,9 +156,7 @@ mod test {
 
     #[test]
     fn test_char() {
-        let b = "ab".as_bytes();
-
-        let m: Parser<_, _, _> = From::from(b);
+        let m: Parser<_, _, _> = From::from(b"ab");
 
         let Parser(buf, r) = char(m, b'a');
 
@@ -168,9 +166,7 @@ mod test {
 
     #[test]
     fn test_char_fail() {
-        let b = "ab".as_bytes();
-
-        let m: Parser<_, _, _> = From::from(b);
+        let m: Parser<_, _, _> = From::from(b"ab");
 
         let Parser(buf, r) = char(m, b'b');
 
@@ -180,9 +176,7 @@ mod test {
 
     #[test]
     fn test_char_empty() {
-        let b = "".as_bytes();
-
-        let m: Parser<_, _, _> = From::from(b);
+        let m: Parser<_, _, _> = From::from(b"");
 
         let Parser(buf, r) = char(m, b'b');
 
@@ -227,9 +221,7 @@ mod test {
                 bind(decimal, |frac|
                     return (real, frac))))*/
 
-        let b = "123.4567 ".as_bytes();
-
-        let m: Parser<_, _, _> = From::from(b);
+        let m: Parser<_, _, _> = From::from(b"123.4567 ");
 
         let Parser(buf, state) =
             bind(decimal(m), |m, real|
