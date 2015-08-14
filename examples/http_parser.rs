@@ -36,12 +36,12 @@ fn is_token(c: u8) -> bool {
 }
 
 fn is_horizontal_space(c: u8) -> bool { c == b' ' || c == b'\t' }
-fn is_space(c: u8) -> bool { c == b' ' }
-fn is_not_space(c: u8) -> bool { c != b' ' }
-fn is_end_of_line(c: u8) -> bool { c == b'\r' || c == b'\n' }
+fn is_space(c: u8)            -> bool { c == b' ' }
+fn is_not_space(c: u8)        -> bool { c != b' ' }
+fn is_end_of_line(c: u8)      -> bool { c == b'\r' || c == b'\n' }
 
 fn is_http_version_prefix(c: u8) -> bool { b"HTP/".iter().position(|&i| i == c).is_some() }
-fn is_http_version(c: u8) -> bool { c >= b'0' && c <= b'9' || c == b'.' }
+fn is_http_version(c: u8)        -> bool { c >= b'0' && c <= b'9' || c == b'.' }
 
 fn end_of_line<'a>(p: Empty<'a, u8>) -> Parser<'a, u8, u8, Error<u8>> {
     or(mdo!{p,
@@ -54,8 +54,9 @@ fn end_of_line<'a>(p: Empty<'a, u8>) -> Parser<'a, u8, u8, Error<u8>> {
 
 fn http_version<'a>(p: Empty<'a, u8>) -> Parser<'a, u8, &'a [u8], Error<u8>> {
     mdo!{p,
-        take_while1(is_http_version_prefix);
+                  take_while1(is_http_version_prefix);
         version = take_while1(is_http_version);
+
         ret version
     }
 }

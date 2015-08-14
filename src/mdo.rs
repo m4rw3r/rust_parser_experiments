@@ -13,8 +13,9 @@
 ///
 ///     let r: Parser<_, (u8, u8), parser::Error<_>> = mdo!{m,
 ///         first  = any;
-///         char(b':');
+///                  char(b':');
 ///         second = any;
+///
 ///         ret (first, second)
 ///     };
 ///
@@ -92,6 +93,7 @@ mod test {
         fn decimal<'a>(m: Parser<'a, u8, (), ()>) -> Parser<'a, u8, usize, Error<u8>> {
             mdo!{m,
                  bytes = take_while1(is_digit);
+
                  ret bytes.iter().fold(0, |a, b| a * 10 + (b - b'0') as usize)
             }
         }
@@ -100,8 +102,9 @@ mod test {
 
         let Parser(buf, state) = mdo!(m,
             real = decimal;
-            char(b'.');
+                   char(b'.');
             frac = decimal;
+
             ret _, Error<_> : (real, frac)
         );
 
