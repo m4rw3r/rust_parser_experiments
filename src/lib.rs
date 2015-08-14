@@ -9,6 +9,7 @@ pub use parsers::{
     any,
     char,
     take,
+    take_till,
     take_while1,
     not_char,
 };
@@ -29,6 +30,8 @@ enum State<'a, I: 'a + Copy, T, E> {
 #[must_use]
 pub struct Parser<'a, I: 'a + Copy, T, E>(&'a [I], State<'a, I, T, E>);
 
+/// A parser state where no data or error is present.
+#[must_use]
 pub type Empty<'a, I: 'a + Copy> = Parser<'a, I, (), ()>;
 
 impl<'a, I: 'a + Copy, T, E> State<'a, I, T, E> {

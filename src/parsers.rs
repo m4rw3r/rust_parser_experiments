@@ -124,7 +124,7 @@ pub fn take<'a, I: 'a + Copy>(m: Empty<'a, I>, num: usize) -> Parser<'a, I, &'a 
 /// more input which needs to be matched. If zero items were matched an error will be returned.
 ///
 /// ```
-/// use parser::{Error, Parser, take_while1};
+/// use parser::{Parser, take_while1};
 ///
 /// let p: Parser<_, _, _> = From::from(b"abcdcba");
 ///
@@ -137,6 +137,32 @@ pub fn take_while1<'a, I: 'a + Copy, F>(m: Empty<'a, I>, f: F) -> Parser<'a, I, 
 
     match buf.iter().map(|c| *c).position(|c| f(c) == false) {
         Some(0) => Parser(buf,       State::Err(buf, Error::Unexpected(buf[0]))),
+        Some(n) => Parser(&buf[n..], State::Ok(&buf[0..n])),
+        // TODO: Should this following 1 be something else, seeing as take_while1 is potentially
+        // infinite?
+        None    => Parser(buf,       State::Incomplete(buf, 1)),
+    }
+}
+
+/// Matches all items until ``f`` returns true, all items to that point will be returned as a slice
+/// upon success.
+/// 
+/// If no failure can be found the parser will be considered to be incomplete as there might be
+/// more input which needs to be matched.
+/// 
+/// ```
+/// use parser::{Parser, take_till};
+/// 
+/// let p = From::from(b"abcdef");
+/// 
+/// assert_eq!(take_till(p, |c| c == b'd').unwrap(), b"abc");
+/// ```
+#[inline]
+pub fn take_till<'a, I: 'a + Copy, F>(m: Empty<'a, I>, f: F) -> Parser<'a, I, &'a [I], Error<I>>
+  where F: Fn(I) -> bool {
+    let Parser(buf, _) = m;
+
+    match buf.iter().map(|c| *c).position(f) {
         Some(n) => Parser(&buf[n..], State::Ok(&buf[0..n])),
         // TODO: Should this following 1 be something else, seeing as take_while1 is potentially
         // infinite?
