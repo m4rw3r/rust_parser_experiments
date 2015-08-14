@@ -1,9 +1,23 @@
-mod parsers;
+mod combinators;
+mod iter;
 mod mdo;
+mod parsers;
 
 use std::error;
 use std::fmt;
 use std::any;
+
+pub use combinators::{
+    many,
+    many1,
+    or,
+    try,
+};
+
+pub use iter::{
+    Iter,
+    IResult,
+};
 
 pub use parsers::{
     any,
