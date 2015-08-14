@@ -49,7 +49,7 @@ impl<T: any::Any + fmt::Debug + Copy> error::Error for Error<T> {
 pub fn any<'a, I: 'a + Copy>(m: Empty<'a, I>) -> Parser<'a, I, I, Error<I>> {
     match m.0.first() {
         Some(&c) => Parser(&m.0[1..], State::Ok(c)),
-        None     => Parser(m.0,       State::Incomplete(m.0)),
+        None     => Parser(m.0,       State::Incomplete(m.0, 1)),
     }
 }
 
@@ -67,7 +67,7 @@ pub fn any<'a, I: 'a + Copy>(m: Empty<'a, I>) -> Parser<'a, I, I, Error<I>> {
 #[inline]
 pub fn char<'a, I: 'a + Copy + Eq>(m: Empty<'a, I>, c: I) -> Parser<'a, I, I, Error<I>> {
     match m.0.first().map(|i| *i) {
-        None              => Parser(m.0,       State::Incomplete(m.0)),
+        None              => Parser(m.0,       State::Incomplete(m.0, 1)),
         Some(i) if i == c => Parser(&m.0[1..], State::Ok(c)),
         Some(i)           => Parser(m.0,       State::Err(m.0, Error::Expected(c, i))),
     }
@@ -94,7 +94,9 @@ pub fn take_while1<'a, I: 'a + Copy, F>(m: Empty<'a, I>, f: F) -> Parser<'a, I, 
     match buf.iter().map(|c| *c).position(|c| f(c) == false) {
         Some(0) => Parser(buf,       State::Err(buf, Error::Unexpected(buf[0]))),
         Some(n) => Parser(&buf[n..], State::Ok(&buf[0..n])),
-        None    => Parser(buf,       State::Incomplete(buf)),
+        // TODO: Should this following 1 be something else, seeing as take_while1 is potentially
+        // infinite?
+        None    => Parser(buf,       State::Incomplete(buf, 1)),
     }
 }
 
@@ -141,7 +143,7 @@ mod test {
         let Parser(buf, r) = char(m, b'b');
 
         assert_eq!(buf, b"");
-        assert_eq!(r, State::Incomplete(b""));
+        assert_eq!(r, State::Incomplete(b"", 1));
     }
 
     #[test]

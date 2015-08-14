@@ -17,7 +17,8 @@ pub use parsers::{
 enum State<'a, I: 'a + Copy, T, E> {
     Ok(T),
     Err(&'a [I], E),
-    Incomplete(&'a [I])
+    /// Incomplete parsing, remaining data and the requested length
+    Incomplete(&'a [I], usize)
 }
 
 /// The main parser data-type, contains the current fragment to be parsed and the current
@@ -33,9 +34,9 @@ impl<'a, I: 'a + Copy, T, E> State<'a, I, T, E> {
     fn map<F, U>(self, f: F) -> State<'a, I, U, E>
       where F: FnOnce(T) -> U {
         match self {
-            State::Ok(t)         => State::Ok(f(t)),
-            State::Err(i, t)     => State::Err(i, t),
-            State::Incomplete(i) => State::Incomplete(i),
+            State::Ok(t)            => State::Ok(f(t)),
+            State::Err(i, t)        => State::Err(i, t),
+            State::Incomplete(i, r) => State::Incomplete(i, r),
         }
     }
 
@@ -43,7 +44,7 @@ impl<'a, I: 'a + Copy, T, E> State<'a, I, T, E> {
     fn is_good(&self) -> bool {
         match *self {
             State::Ok(_) => true,
-            _     => false,
+            _            => false,
         }
     }
 
@@ -51,9 +52,9 @@ impl<'a, I: 'a + Copy, T, E> State<'a, I, T, E> {
     fn map_err<F, O>(self, f: F) -> State<'a, I, T, O>
       where F: FnOnce(E) -> O {
         match self {
-            State::Ok(t)         => State::Ok(t),
-            State::Err(i, t)     => State::Err(i, f(t)),
-            State::Incomplete(i) => State::Incomplete(i),
+            State::Ok(t)            => State::Ok(t),
+            State::Err(i, t)        => State::Err(i, f(t)),
+            State::Incomplete(i, r) => State::Incomplete(i, r),
         }
     }
 }
@@ -63,9 +64,9 @@ impl<'a, I: 'a + Copy + fmt::Debug, T, E: error::Error> Parser<'a, I, T, E> {
     #[inline]
     pub fn unwrap(self) -> T {
         match self.1 {
-            State::Ok(t)         => t,
-            State::Err(i, e)     => panic!("parser error: {} at {:?}", e, i),
-            State::Incomplete(_) => panic!("parser is incomplete"),
+            State::Ok(t)            => t,
+            State::Err(i, e)        => panic!("parser error: {} at {:?}", e, i),
+            State::Incomplete(_, r) => panic!("parser is incomplete, expecting at least {} more items", r),
         }
     }
 }
@@ -122,8 +123,8 @@ pub fn bind<'a, I: 'a + Copy, T, E, F, U, O>(m: Parser<'a, I, T, E>, f: F) -> Pa
             // We rollback if the parser ``f`` failed
             Parser(if r.1.is_good() { r.0 } else { m.0 }, r.1.map_err(From::from))
         },
-        State::Err(i, e)     => Parser(m.0, State::Err(i, From::from(e))),
-        State::Incomplete(i) => Parser(m.0, State::Incomplete(i))
+        State::Err(i, e)        => Parser(m.0, State::Err(i, From::from(e))),
+        State::Incomplete(i, r) => Parser(m.0, State::Incomplete(i, r))
     }
 }
 
@@ -188,7 +189,7 @@ mod test {
     fn test_map() {
         let m1: Parser<_, usize, usize>   = Parser(b"abc", State::Ok(123));
         let m2: Parser<_, usize, usize>   = Parser(b"abc", State::Err(b"def", 321));
-        let m3: Parser<_, usize, usize>   = Parser(b"abc", State::Incomplete(b"def"));
+        let m3: Parser<_, usize, usize>   = Parser(b"abc", State::Incomplete(b"def", 1));
 
         let Parser(buf, d)  = map(m1, |data| data + 1);
 
@@ -203,14 +204,14 @@ mod test {
         let Parser(buf, d) = map(m3, |data| data + 1);
 
         assert_eq!(buf, b"abc");
-        assert_eq!(d, State::Incomplete(b"def"));
+        assert_eq!(d, State::Incomplete(b"def", 1));
     }
 
     #[test]
     fn test_map2() {
         let m1: Parser<_, usize, usize>   = Parser(b"abc", State::Ok(123));
         let m2: Parser<_, usize, usize>   = Parser(b"abc", State::Err(b"def", 321));
-        let m3: Parser<_, usize, usize>   = Parser(b"abc", State::Incomplete(b"def"));
+        let m3: Parser<_, usize, usize>   = Parser(b"abc", State::Incomplete(b"def", 1));
 
         let Parser(buf, d)  = m1.map(|data| data + 1);
 
@@ -225,6 +226,6 @@ mod test {
         let Parser(buf, d) = m3.map(|data| data + 1);
 
         assert_eq!(buf, b"abc");
-        assert_eq!(d, State::Incomplete(b"def"));
+        assert_eq!(d, State::Incomplete(b"def", 1));
     }
 }
