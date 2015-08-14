@@ -49,6 +49,7 @@ pub fn try<'a, I: 'a + Copy, T, E>(m: Parser<'a, I, T, E>, default: T) -> Parser
 /// 
 /// assert_eq!(or(char(p, b'b'), |m| char(m, b'a')).unwrap(), b'a');
 /// ```
+#[inline]
 pub fn or<'a, I: 'a + Copy, T, E, F>(m: Parser<'a, I, T, E>, f: F) -> Parser<'a, I, T, E>
   where F: Fn(Empty<'a, I>) -> Parser<'a, I, T, E> {
     match m.1 {
@@ -77,6 +78,7 @@ pub fn or<'a, I: 'a + Copy, T, E, F>(m: Parser<'a, I, T, E>, f: F) -> Parser<'a,
 /// assert_eq!(v[0], b"a");
 /// assert_eq!(v[1], b"bc");
 /// ```
+#[inline]
 pub fn many<'a, I: 'a + Copy, T, E, F, U>(m: Empty<'a, I>, f: F) -> Parser<'a, I, T, E>
   where F: Fn(Empty<'a, I>) -> Parser<'a, I, U, E>,
         T: FromIterator<U> {
@@ -112,6 +114,7 @@ pub fn many<'a, I: 'a + Copy, T, E, F, U>(m: Empty<'a, I>, f: F) -> Parser<'a, I
 /// let _ = r.unwrap();
 /// ```
 // TODO: Proper checking of return value in doc-test
+#[inline]
 pub fn many1<'a, I: 'a + Copy, T, E, F, U>(m: Empty<'a, I>, f: F) -> Parser<'a, I, T, Error<I>>
   where F: Fn(Empty<'a, I>) -> Parser<'a, I, U, E>,
         T: FromIterator<U> {
