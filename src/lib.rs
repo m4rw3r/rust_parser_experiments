@@ -144,9 +144,8 @@ mod test {
 
     #[test]
     fn test_bind() {
-        let data  = "abc".as_bytes();
         let mut d = None;
-        let m = Parser(data, State::Ok("a"));
+        let m = Parser(b"abc", State::Ok("a"));
 
         let Parser(buf, state) = bind(m, |m, p| {
             d = Some(p);
@@ -154,17 +153,14 @@ mod test {
             ret::<_, _, ()>(m, "test")
         });
 
-        assert_eq!((buf, state), (data, State::Ok("test")));
+        assert_eq!(buf, b"abc");
+        assert_eq!(state, State::Ok("test"));
         assert_eq!(d, Some("a"));
     }
 
     #[test]
     fn test_ret() {
-        let m: Parser<_, _, _> = From::from("abc".as_bytes());
-
-        let r = ret::<_, usize, usize>(m, 123);
-
-        let Parser(buf, d) = r;
+        let Parser(buf, d) = ret::<_, usize, usize>(From::from(&b"abc"[..]), 123);
 
         assert_eq!(buf, b"abc");
         assert_eq!(d, State::Ok(123));
@@ -172,11 +168,7 @@ mod test {
 
     #[test]
     fn test_err() {
-        let m: Parser<_, _, _> = From::from("abc".as_bytes());
-
-        let r = err::<_, usize, usize>(m, 123);
-
-        let Parser(buf, d) = r;
+        let Parser(buf, d) = err::<_, usize, usize>(From::from(&b"abc"[..]), 123);
 
         assert_eq!(buf, b"abc");
         assert_eq!(d, State::Err(b"abc", 123));
@@ -184,25 +176,24 @@ mod test {
 
     #[test]
     fn test_map() {
-        let data = "abc".as_bytes();
-        let m1: Parser<_, usize, usize>   = Parser(data, State::Ok(123));
-        let m2: Parser<_, usize, usize>   = Parser(data, State::Err(data, 321));
-        let m3: Parser<_, usize, usize>   = Parser(data, State::Incomplete(data));
+        let m1: Parser<_, usize, usize>   = Parser(b"abc", State::Ok(123));
+        let m2: Parser<_, usize, usize>   = Parser(b"abc", State::Err(b"def", 321));
+        let m3: Parser<_, usize, usize>   = Parser(b"abc", State::Incomplete(b"def"));
 
         let Parser(buf, d)  = map(m1, |data| data + 1);
 
-        assert_eq!(buf, data);
+        assert_eq!(buf, b"abc");
         assert_eq!(d, State::Ok(124));
 
         let Parser(buf, d) = map(m2, |data| data + 1);
 
-        assert_eq!(buf, data);
-        assert_eq!(d, State::Err(data, 321));
+        assert_eq!(buf, b"abc");
+        assert_eq!(d, State::Err(b"def", 321));
 
         let Parser(buf, d) = map(m3, |data| data + 1);
 
-        assert_eq!(buf, data);
-        assert_eq!(d, State::Incomplete(data));
+        assert_eq!(buf, b"abc");
+        assert_eq!(d, State::Incomplete(b"def"));
     }
 
     #[test]

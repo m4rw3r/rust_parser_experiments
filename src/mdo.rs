@@ -96,8 +96,7 @@ mod test {
             }
         }
 
-        let d: &[u8]           = b"123.4567 ";
-        let m: Parser<_, _, _> = From::from(d);
+        let m = From::from(b"123.4567 " as &[u8]);
 
         let Parser(buf, state) = mdo!(m,
             real = decimal;
