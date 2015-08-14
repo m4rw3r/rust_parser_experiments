@@ -44,6 +44,14 @@ macro_rules! mdo (
     ( $m:ident , ) => {
         $m
     };
+    // Then without parameters
+    ( $m:ident , $i:ident; $( $t:tt )* ) => {
+        bind($i($m), |$m, _| mdo!{ $m, $( $t )* })
+    };
+    // Then
+    ( $m:ident , $i:ident ($( $e:expr ),+); $( $t:tt )* ) => {
+        bind($i($m, $( $e ),+), |$m, _| mdo!{ $m, $( $t )* })
+    };
     // Bind
     ( $m:ident , $p:pat = $i:ident ; $( $t:tt )* ) => {
         bind($i($m), |$m, $p| mdo!{ $m, $( $t )* })
@@ -59,14 +67,6 @@ macro_rules! mdo (
     // Bind, params to $i, type
     ( $m:ident , $p:ident : $ty:ty = $i:ident ($( $e:expr ),+); $( $t:tt )* ) => {
         bind($i($m, $( $e ),+), |$m, $p: $ty| mdo!{ $m, $( $t )* })
-    };
-    // Then without parameters
-    ( $m:ident , $i:ident; $( $t:tt )* ) => {
-        bind($i($m), |$m, _| mdo!{ $m, $( $t )* })
-    };
-    // Then
-    ( $m:ident , $i:ident ($( $e:expr ),+); $( $t:tt )* ) => {
-        bind($i($m, $( $e ),+), |$m, _| mdo!{ $m, $( $t )* })
     };
 );
 
