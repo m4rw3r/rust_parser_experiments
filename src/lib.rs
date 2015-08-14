@@ -8,7 +8,9 @@ pub use parsers::{
     Error,
     any,
     char,
+    take,
     take_while1,
+    not_char,
 };
 
 /// Internal 3-variant Result to also represent incomplete

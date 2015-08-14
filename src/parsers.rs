@@ -14,6 +14,8 @@ pub enum Error<T: Copy> {
     Unexpected(T),
     /// Expected the first token, got the second token instead.
     Expected(T, T),
+    /// Expected anything but ``T``.
+    NotExpect(T),
 }
 
 impl<T: fmt::Debug + Copy> fmt::Display for Error<T> {
@@ -21,6 +23,7 @@ impl<T: fmt::Debug + Copy> fmt::Display for Error<T> {
         match self {
             &Error::Unexpected(t)  => write!(f, "unexpected '{:?}' while parsing", t),
             &Error::Expected(e, a) => write!(f, "expected '{:?}', got '{:?}'", e, a),
+            &Error::NotExpect(e)   => write!(f, "expected anything but '{:?}', got {:?}", e, e),
         }
     }
 }
@@ -30,6 +33,7 @@ impl<T: any::Any + fmt::Debug + Copy> error::Error for Error<T> {
         match self {
             &Error::Unexpected(_)  => "An unexpected character was encountered",
             &Error::Expected(_, _) => "Expected a certain character, got another",
+            &Error::NotExpect(_)   => "Expected any character but one, got the one",
         }
     }
 }
@@ -53,6 +57,26 @@ pub fn any<'a, I: 'a + Copy>(m: Empty<'a, I>) -> Parser<'a, I, I, Error<I>> {
     }
 }
 
+/// Matches an item as long as it is not equal to ``c``.
+/// 
+/// If the buffer length is 0 this parser is considered incomplete.
+/// 
+/// ```
+/// use parser::{Error, Parser, not_char};
+/// 
+/// let p: Parser<_, _, _> = From::from(b"abc");
+/// 
+/// assert_eq!(not_char(p, b'c').unwrap(), b'a');
+/// ```
+#[inline]
+pub fn not_char<'a, I: 'a + Copy + Eq>(m: Empty<'a, I>, c: I) -> Parser<'a, I, I, Error<I>> {
+    match m.0.first() {
+        Some(&i) if i != c => Parser(&m.0[1..], State::Ok(i)),
+        Some(&i)           => Parser(m.0,       State::Err(m.0, Error::NotExpect(i))),
+        None               => Parser(m.0,       State::Incomplete(m.0, 1)),
+    }
+}
+
 /// Matches a single character, returning the matched character on success.
 ///
 /// If the buffer length is 0 this parser is considered incomplete.
@@ -70,6 +94,26 @@ pub fn char<'a, I: 'a + Copy + Eq>(m: Empty<'a, I>, c: I) -> Parser<'a, I, I, Er
         None              => Parser(m.0,       State::Incomplete(m.0, 1)),
         Some(i) if i == c => Parser(&m.0[1..], State::Ok(c)),
         Some(i)           => Parser(m.0,       State::Err(m.0, Error::Expected(c, i))),
+    }
+}
+
+/// Matches ``num`` items no matter what they are, returning a slice of the matched items.
+/// 
+/// If the buffer length is less than ``num`` this parser is considered incomplete.
+/// 
+/// ```
+/// use parser::{Parser, take};
+/// 
+/// let p = From::from(b"abcd");
+/// 
+/// assert_eq!(take(p, 3).unwrap(), b"abc");
+/// ```
+#[inline]
+pub fn take<'a, I: 'a + Copy>(m: Empty<'a, I>, num: usize) -> Parser<'a, I, &'a [I], Error<I>> {
+    if num <= m.0.len() {
+        Parser(&m.0[num..], State::Ok(&m.0[..num]))
+    } else {
+        Parser(m.0, State::Incomplete(m.0, num))
     }
 }
 
