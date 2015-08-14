@@ -24,6 +24,7 @@ pub use parsers::{
     char,
     take,
     take_till,
+    take_while,
     take_while1,
     not_char,
 };

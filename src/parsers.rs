@@ -84,7 +84,42 @@ pub fn take<'a, I: 'a + Copy>(m: Empty<'a, I>, num: usize) -> Parser<'a, I, &'a 
     }
 }
 
-/// Matches all items until ``f`` returns false, if at least one item matched this parser succeeds
+/// Matches all items while ``f`` returns false, returns a slice of all the matched items.
+/// 
+/// If no failure can be found the parser will be considered to be incomplete as there might be
+/// more input which needs to be matched.
+/// 
+/// ```
+/// use parser::{Parser, take_while};
+///
+/// let p: Parser<_, _, _> = From::from(b"abcdcba");
+///
+/// assert_eq!(take_while(p, |c| c == b'a' || c == b'b').unwrap(), b"ab");
+/// ```
+/// 
+/// Without managing to match anything:
+/// 
+/// ```
+/// use parser::{Parser, take_while};
+///
+/// let p: Parser<_, _, _> = From::from(b"abcdcba");
+///
+/// assert_eq!(take_while(p, |c| c == b'z').unwrap(), b"");
+/// ```
+#[inline]
+pub fn take_while<'a, I: 'a + Copy, F>(m: Empty<'a, I>, f: F) -> Parser<'a, I, &'a [I], Error<I>>
+  where F: Fn(I) -> bool {
+    let Parser(buf, _) = m;
+
+    match buf.iter().map(|c| *c).position(|c| f(c) == false) {
+        Some(n) => Parser(&buf[n..], State::Ok(&buf[..n])),
+        // TODO: Should this following 1 be something else, seeing as take_while1 is potentially
+        // infinite?
+        None    => Parser(buf,       State::Incomplete(buf, 1)),
+    }
+}
+
+/// Matches all items while ``f`` returns true, if at least one item matched this parser succeeds
 /// and returns a slice of all the matched items.
 /// 
 /// If no failure can be found the parser will be considered to be incomplete as there might be
@@ -104,7 +139,7 @@ pub fn take_while1<'a, I: 'a + Copy, F>(m: Empty<'a, I>, f: F) -> Parser<'a, I, 
 
     match buf.iter().map(|c| *c).position(|c| f(c) == false) {
         Some(0) => Parser(buf,       State::Err(buf, Error::Unexpected(buf[0]))),
-        Some(n) => Parser(&buf[n..], State::Ok(&buf[0..n])),
+        Some(n) => Parser(&buf[n..], State::Ok(&buf[..n])),
         // TODO: Should this following 1 be something else, seeing as take_while1 is potentially
         // infinite?
         None    => Parser(buf,       State::Incomplete(buf, 1)),
