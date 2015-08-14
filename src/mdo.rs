@@ -72,13 +72,13 @@ macro_rules! mdo (
 #[cfg(test)]
 mod test {
     use ::{
+        Error,
         Parser,
         State,
         bind,
         ret,
     };
     use ::parsers::{
-        Error,
         char,
         take_while1,
     };

@@ -3,9 +3,9 @@ mod mdo;
 
 use std::error;
 use std::fmt;
+use std::any;
 
 pub use parsers::{
-    Error,
     any,
     char,
     take,
@@ -13,6 +13,41 @@ pub use parsers::{
     take_while1,
     not_char,
 };
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum Error<T: Copy> {
+    /// Did not expect the given token.
+    Unexpected(T),
+    /// Expected the first token, got the second token instead.
+    Expected(T, T),
+    /// Expected anything but ``T``.
+    NotExpect(T),
+    /// Many1 combinator failed to parse at least one item.
+    // TODO: Better error, wrap the inner error
+    Many1Fail,
+}
+
+impl<T: fmt::Debug + Copy> fmt::Display for Error<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            &Error::Unexpected(t)  => write!(f, "unexpected '{:?}' while parsing", t),
+            &Error::Expected(e, a) => write!(f, "expected '{:?}', got '{:?}'", e, a),
+            &Error::NotExpect(e)   => write!(f, "expected anything but '{:?}', got {:?}", e, e),
+            &Error::Many1Fail      => write!(f, "expected at least one match, got 0"),
+        }
+    }
+}
+
+impl<T: any::Any + fmt::Debug + Copy> error::Error for Error<T> {
+    fn description(&self) -> &str {
+        match self {
+            &Error::Unexpected(_)  => "An unexpected character was encountered",
+            &Error::Expected(_, _) => "Expected a certain character, got another",
+            &Error::NotExpect(_)   => "Expected any character but one, got the one",
+            &Error::Many1Fail      => "Expected at least one match, got 0",
+        }
+    }
+}
 
 /// Internal 3-variant Result to also represent incomplete
 #[derive(Debug, Eq, PartialEq)]
