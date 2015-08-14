@@ -45,6 +45,7 @@ impl<T: any::Any + fmt::Debug + Copy> error::Error for Error<T> {
 ///
 /// assert_eq!(any(p).unwrap(), b'a');
 /// ```
+#[inline]
 pub fn any<'a, I: 'a + Copy>(m: Empty<'a, I>) -> Parser<'a, I, I, Error<I>> {
     match m.0.first() {
         Some(&c) => Parser(&m.0[1..], State::Ok(c)),
@@ -63,6 +64,7 @@ pub fn any<'a, I: 'a + Copy>(m: Empty<'a, I>) -> Parser<'a, I, I, Error<I>> {
 ///
 /// assert_eq!(char(p, b'a').unwrap(), b'a');
 /// ```
+#[inline]
 pub fn char<'a, I: 'a + Copy + Eq>(m: Empty<'a, I>, c: I) -> Parser<'a, I, I, Error<I>> {
     match m.0.first().map(|i| *i) {
         None              => Parser(m.0,       State::Incomplete(m.0)),
@@ -84,6 +86,7 @@ pub fn char<'a, I: 'a + Copy + Eq>(m: Empty<'a, I>, c: I) -> Parser<'a, I, I, Er
 ///
 /// assert_eq!(take_while1(p, |c| c == b'a' || c == b'b').unwrap(), b"ab");
 /// ```
+#[inline]
 pub fn take_while1<'a, I: 'a + Copy, F>(m: Empty<'a, I>, f: F) -> Parser<'a, I, &'a [I], Error<I>>
   where F: Fn(I) -> bool {
     let Parser(buf, _) = m;
@@ -152,9 +155,9 @@ mod test {
             ret bytes.iter().fold(0, |a, b| a * 10 + (b - b'0') as usize)
 
             take_while1 is_digit >>= \bytes ->
-                ret bytes.iter().fold(0, |a, b| a * 10 + (b - b'0') as usize)*/
+                ret bytes.iter().fold(0, |a, b| a * 10 + (b - b'0') as usize)
 
-            /*bind(take_while1(m, is_digit), |bytes|
+            bind(take_while1(m, is_digit), |bytes|
                 return bytes.iter().fold(0, |a, b| a * 10 + (b - b'0') as usize))*/
 
             bind(take_while1(m, is_digit), |m, bytes|
