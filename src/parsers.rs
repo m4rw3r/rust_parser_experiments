@@ -7,6 +7,55 @@ use ::{
     State,
 };
 
+/// Matches any item, returning it if present.
+///
+/// If the buffer length is 0 this parser is considered incomplete.
+///
+/// ```
+/// use parser::{Parser, any};
+///
+/// let p: Parser<_, _, _> = From::from(b"abc");
+///
+/// assert_eq!(any(p).unwrap(), b'a');
+/// ```
+#[inline]
+pub fn any<'a, I: 'a + Copy>(m: Empty<'a, I>) -> Parser<'a, I, I, Error<I>> {
+    satisfy(m, |_| true)
+}
+
+/// Matches a single character, returning the matched character on success.
+///
+/// If the buffer length is 0 this parser is considered incomplete.
+///
+/// ```
+/// use parser::{Error, Parser, char};
+///
+/// let p: Parser<_, _, _> = From::from(b"abc");
+///
+/// assert_eq!(char(p, b'a').unwrap(), b'a');
+/// ```
+#[inline]
+pub fn char<'a, I: 'a + Copy + Eq>(m: Empty<'a, I>, c: I) -> Parser<'a, I, I, Error<I>> {
+    // TODO: Expand on the error with expected character
+    satisfy(m, |i| i == c)
+}
+
+/// Matches an item as long as it is not equal to ``c``.
+/// 
+/// If the buffer length is 0 this parser is considered incomplete.
+/// 
+/// ```
+/// use parser::{Parser, not_char};
+/// 
+/// let p: Parser<_, _, _> = From::from(b"abc");
+/// 
+/// assert_eq!(not_char(p, b'c').unwrap(), b'a');
+/// ```
+#[inline]
+pub fn not_char<'a, I: 'a + Copy + Eq>(m: Empty<'a, I>, c: I) -> Parser<'a, I, I, Error<I>> {
+    satisfy(m, |i| i != c)
+}
+
 /// Matches an item using ``f``, the item is returned if ``f`` yields true, otherwise this parser
 /// fails.
 ///
@@ -29,53 +78,23 @@ pub fn satisfy<'a, I: 'a + Copy, F>(m: Empty<'a, I>, f: F) -> Parser<'a, I, I, E
     }
 }
 
-/// Matches any item, returning it if present.
-///
-/// If the buffer length is 0 this parser is considered incomplete.
-///
+/// Matches any item but does not consume it, on success it gives ``Some`` but if no input remains
+/// ``None`` is produced.
+/// 
+/// This parser is never considered incomplete.
+/// 
 /// ```
-/// use parser::{Parser, any};
-///
-/// let p: Parser<_, _, _> = From::from(b"abc");
-///
-/// assert_eq!(any(p).unwrap(), b'a');
+/// use parser::{Parser, peek};
+/// 
+/// let p1: Parser<_, _, _> = From::from(b"abc");
+/// let p2: Parser<_, _, _> = From::from(b"");
+/// 
+/// assert_eq!(peek(p1).unwrap(), Some(b'a'));
+/// assert_eq!(peek(p2).unwrap(), None);
 /// ```
 #[inline]
-pub fn any<'a, I: 'a + Copy>(m: Empty<'a, I>) -> Parser<'a, I, I, Error<I>> {
-    satisfy(m, |_| true)
-}
-
-/// Matches an item as long as it is not equal to ``c``.
-/// 
-/// If the buffer length is 0 this parser is considered incomplete.
-/// 
-/// ```
-/// use parser::{Parser, not_char};
-/// 
-/// let p: Parser<_, _, _> = From::from(b"abc");
-/// 
-/// assert_eq!(not_char(p, b'c').unwrap(), b'a');
-/// ```
-#[inline]
-pub fn not_char<'a, I: 'a + Copy + Eq>(m: Empty<'a, I>, c: I) -> Parser<'a, I, I, Error<I>> {
-    satisfy(m, |i| i != c)
-}
-
-/// Matches a single character, returning the matched character on success.
-///
-/// If the buffer length is 0 this parser is considered incomplete.
-///
-/// ```
-/// use parser::{Error, Parser, char};
-///
-/// let p: Parser<_, _, _> = From::from(b"abc");
-///
-/// assert_eq!(char(p, b'a').unwrap(), b'a');
-/// ```
-#[inline]
-pub fn char<'a, I: 'a + Copy + Eq>(m: Empty<'a, I>, c: I) -> Parser<'a, I, I, Error<I>> {
-    // TODO: Expand on the error with expected character
-    satisfy(m, |i| i == c)
+pub fn peek<'a, I: 'a + Copy>(m: Empty<'a, I>) -> Parser<'a, I, Option<I>, Error<I>> {
+    Parser(m.0, State::Ok(m.0.first().map(|&c| c)))
 }
 
 /// Matches ``num`` items no matter what they are, returning a slice of the matched items.
@@ -184,6 +203,35 @@ pub fn take_till<'a, I: 'a + Copy, F>(m: Empty<'a, I>, f: F) -> Parser<'a, I, &'
         // infinite?
         None    => Parser(buf,       State::Incomplete(buf, 1)),
     }
+}
+
+/// Matches the given slice against the parser, returning the matched slice upon success.
+/// 
+/// If the length of the contained data is shorter than the given slice this parser is considered
+/// incomplete.
+/// 
+/// ```
+/// use parser::{Parser, string};
+/// 
+/// let p: Parser<_, _, _> = From::from(b"abcdef");
+/// 
+/// assert_eq!(string(p, b"abc").unwrap(), b"abc");
+/// ```
+#[inline]
+pub fn string<'a, 'b, I: Copy + Eq>(m: Empty<'a, I>, s: &'b [I]) -> Parser<'a, I, &'a [I], Error<I>> {
+    if s.len() > m.0.len() {
+        return Parser(m.0, State::Incomplete(m.0, s.len() - m.0.len()));
+    }
+
+    let d = &m.0[..s.len()];
+
+    for i in 0..s.len() {
+        if s[i] != d[i] {
+            return Parser(m.0, State::Err(m.0, Error::Expected(s[i], d[i])));
+        }
+    }
+
+    Parser(&m.0[s.len()..], State::Ok(d))
 }
 
 #[cfg(test)]
