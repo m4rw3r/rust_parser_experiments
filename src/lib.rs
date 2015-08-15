@@ -1,11 +1,17 @@
-pub mod combinators;
-mod iter;
+//! ... is an eager zero-copy monadic parser combinator operating on arbitrary slices of data.
+//!
 mod mdo;
+
+pub mod iter;
+pub mod combinators;
 pub mod parsers;
 
 use std::error;
 use std::fmt;
 use std::any;
+
+pub use functor::map;
+pub use monad::{bind, err, ret};
 
 pub use combinators::{
     many,
@@ -13,29 +19,17 @@ pub use combinators::{
     or,
     try,
 };
-
-pub use functor::map;
-
-pub use iter::{
-    Iter,
-    IResult,
-};
-
-pub use monad::{
-    bind,
-    err,
-    ret,
-};
-
 pub use parsers::{
-    satisfy,
     any,
     char,
+    not_char,
+    satisfy,
+    peek,
     take,
     take_till,
     take_while,
     take_while1,
-    not_char,
+    string,
 };
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -140,6 +134,7 @@ impl<'a, I: 'a + Copy + fmt::Debug, T, E: error::Error> Parser<'a, I, T, E> {
 }
 
 pub mod functor {
+    //! Functor implementation for ``Parser``.
     use ::Parser;
 
     impl<'a, I: 'a + Copy, T, E> Parser<'a, I, T, E> {
@@ -178,6 +173,7 @@ pub mod functor {
 }
 
 pub mod monad {
+    //! Monad implementation for ``Parser``.
     use ::Empty;
     use ::State;
     use ::Parser;
