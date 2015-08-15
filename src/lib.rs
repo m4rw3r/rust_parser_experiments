@@ -15,6 +15,7 @@ pub use monad::{bind, err, ret};
 
 pub use combinators::{
     option,
+    count,
     or,
     many,
     many1,
@@ -46,16 +47,19 @@ pub enum Error<T: Copy> {
     /// Many1 combinator failed to parse at least one item.
     // TODO: Better error, wrap the inner error
     Many1Fail,
+    /// Parser did not match count times.
+    ExpectedCount(usize),
 }
 
 impl<T: fmt::Debug + Copy> fmt::Display for Error<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
-            &Error::NotSatisfy(t)  => write!(f, "'{:?}' did not satisfy condition", t),
-            &Error::Unexpected(t)  => write!(f, "unexpected '{:?}' while parsing", t),
-            &Error::Expected(e, a) => write!(f, "expected '{:?}', got '{:?}'", e, a),
-            &Error::NotExpect(e)   => write!(f, "expected anything but '{:?}', got {:?}", e, e),
-            &Error::Many1Fail      => write!(f, "expected at least one match, got 0"),
+            &Error::NotSatisfy(t)    => write!(f, "'{:?}' did not satisfy condition", t),
+            &Error::Unexpected(t)    => write!(f, "unexpected '{:?}' while parsing", t),
+            &Error::Expected(e, a)   => write!(f, "expected '{:?}', got '{:?}'", e, a),
+            &Error::NotExpect(e)     => write!(f, "expected anything but '{:?}', got {:?}", e, e),
+            &Error::Many1Fail        => write!(f, "expected at least one match, got 0"),
+            &Error::ExpectedCount(n) => write!(f, "expected {} matches", n),
         }
     }
 }
@@ -63,11 +67,12 @@ impl<T: fmt::Debug + Copy> fmt::Display for Error<T> {
 impl<T: any::Any + fmt::Debug + Copy> error::Error for Error<T> {
     fn description(&self) -> &str {
         match self {
-            &Error::NotSatisfy(_)  => "The encountered item did not satisfy an expression",
-            &Error::Unexpected(_)  => "An unexpected character was encountered",
-            &Error::Expected(_, _) => "Expected a certain character, got another",
-            &Error::NotExpect(_)   => "Expected any character but one, got the one",
-            &Error::Many1Fail      => "Expected at least one match, got 0",
+            &Error::NotSatisfy(_)    => "The encountered item did not satisfy an expression",
+            &Error::Unexpected(_)    => "An unexpected character was encountered",
+            &Error::Expected(_, _)   => "Expected a certain character, got another",
+            &Error::NotExpect(_)     => "Expected any character but one, got the one",
+            &Error::Many1Fail        => "Expected at least one match, got 0",
+            &Error::ExpectedCount(_) => "Did not match a parser exactly a certain amount of times",
         }
     }
 }

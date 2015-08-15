@@ -14,6 +14,42 @@ use ::iter::{
     Iter
 };
 
+/// Matches the given parser exactly ``num`` times, returning all the matches.
+/// 
+/// Will be considered incomplete if any nested parser reports incomplete or if the input is not
+/// enough to match exactly ``num`` times.
+/// 
+/// ```
+/// use parser::{Parser, count, char};
+/// 
+/// let p = From::from(b"aaa");
+/// 
+/// let r: Vec<u8> = count(p, 3, |m| char(m, b'a')).unwrap();
+/// 
+/// assert_eq!(r, [b'a', b'a', b'a']);
+/// ```
+pub fn count<'a, I: 'a + Copy, T, E, F, U>(m: Empty<'a, I>, num: usize, f: F) -> Parser<'a, I, T, Error<I>>
+  where F: Fn(Empty<'a, I>) -> Parser<'a, I, U, E>,
+        T: FromIterator<U> {
+    // If we have gotten an item, if this is false after from_iter we have failed
+    let mut count = 0;
+    let mut iter  = Iter::new(m.0, f);
+
+    let result: T = FromIterator::from_iter(iter.by_ref().take(num).inspect(|_| count = count + 1 ));
+    
+    match (count, iter.last_state()) {
+        (i, IResult::Good) if i == num => Parser(iter.buffer(), State::Ok(result)),
+        (_, IResult::Good)             => if iter.buffer().len() > 0 {
+                Parser(m.0, State::Err(m.0, Error::ExpectedCount(num)))
+            } else {
+                Parser(m.0, State::Incomplete(m.0, 1))
+            },
+        (_, IResult::Incomplete) => Parser(m.0, State::Incomplete(m.0, 1)),
+        // TODO: Propagate inner error
+        (_, IResult::Bad)        => Parser(m.0, State::Err(m.0, Error::ExpectedCount(num))),
+    }
+}
+
 /// Tries the parser ``f``, on success it yields the parsed value, on failure ``default`` will be
 /// yielded instead.
 /// 
