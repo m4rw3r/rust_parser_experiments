@@ -14,7 +14,7 @@ use ::{
 /// ```
 /// use parser::{Parser, any};
 ///
-/// let p: Parser<_, _, _> = From::from(b"abc");
+/// let p = From::from(b"abc");
 ///
 /// assert_eq!(any(p).unwrap(), b'a');
 /// ```
@@ -30,7 +30,7 @@ pub fn any<'a, I: 'a + Copy>(m: Empty<'a, I>) -> Parser<'a, I, I, Error<I>> {
 /// ```
 /// use parser::{Error, Parser, char};
 ///
-/// let p: Parser<_, _, _> = From::from(b"abc");
+/// let p = From::from(b"abc");
 ///
 /// assert_eq!(char(p, b'a').unwrap(), b'a');
 /// ```
@@ -47,7 +47,7 @@ pub fn char<'a, I: 'a + Copy + Eq>(m: Empty<'a, I>, c: I) -> Parser<'a, I, I, Er
 /// ```
 /// use parser::{Parser, not_char};
 /// 
-/// let p: Parser<_, _, _> = From::from(b"abc");
+/// let p = From::from(b"abc");
 /// 
 /// assert_eq!(not_char(p, b'c').unwrap(), b'a');
 /// ```
@@ -64,7 +64,7 @@ pub fn not_char<'a, I: 'a + Copy + Eq>(m: Empty<'a, I>, c: I) -> Parser<'a, I, I
 /// ```
 /// use parser::{Parser, satisfy};
 /// 
-/// let p: Parser<_, _, _> = From::from(b"abc");
+/// let p = From::from(b"abc");
 /// 
 /// assert_eq!(satisfy(p, |c| c == b'a').unwrap(), b'a');
 /// ```
@@ -86,8 +86,8 @@ pub fn satisfy<'a, I: 'a + Copy, F>(m: Empty<'a, I>, f: F) -> Parser<'a, I, I, E
 /// ```
 /// use parser::{Parser, peek};
 /// 
-/// let p1: Parser<_, _, _> = From::from(b"abc");
-/// let p2: Parser<_, _, _> = From::from(b"");
+/// let p1 = From::from(b"abc");
+/// let p2 = From::from(b"");
 /// 
 /// assert_eq!(peek(p1).unwrap(), Some(b'a'));
 /// assert_eq!(peek(p2).unwrap(), None);
@@ -125,7 +125,7 @@ pub fn take<'a, I: 'a + Copy>(m: Empty<'a, I>, num: usize) -> Parser<'a, I, &'a 
 /// ```
 /// use parser::{Parser, take_while};
 ///
-/// let p: Parser<_, _, _> = From::from(b"abcdcba");
+/// let p = From::from(b"abcdcba");
 ///
 /// assert_eq!(take_while(p, |c| c == b'a' || c == b'b').unwrap(), b"ab");
 /// ```
@@ -135,7 +135,7 @@ pub fn take<'a, I: 'a + Copy>(m: Empty<'a, I>, num: usize) -> Parser<'a, I, &'a 
 /// ```
 /// use parser::{Parser, take_while};
 ///
-/// let p: Parser<_, _, _> = From::from(b"abcdcba");
+/// let p = From::from(b"abcdcba");
 ///
 /// assert_eq!(take_while(p, |c| c == b'z').unwrap(), b"");
 /// ```
@@ -161,7 +161,7 @@ pub fn take_while<'a, I: 'a + Copy, F>(m: Empty<'a, I>, f: F) -> Parser<'a, I, &
 /// ```
 /// use parser::{Parser, take_while1};
 ///
-/// let p: Parser<_, _, _> = From::from(b"abcdcba");
+/// let p = From::from(b"abcdcba");
 ///
 /// assert_eq!(take_while1(p, |c| c == b'a' || c == b'b').unwrap(), b"ab");
 /// ```
@@ -227,7 +227,7 @@ pub fn take_remainder<'a, I: Copy>(m: Empty<'a, I>) -> Parser<'a, I, &'a [I], Er
 /// ```
 /// use parser::{Parser, string};
 /// 
-/// let p: Parser<_, _, _> = From::from(b"abcdef");
+/// let p = From::from(b"abcdef");
 /// 
 /// assert_eq!(string(p, b"abc").unwrap(), b"abc");
 /// ```
