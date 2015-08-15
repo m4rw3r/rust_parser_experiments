@@ -29,6 +29,7 @@ pub use parsers::{
     take_till,
     take_while,
     take_while1,
+    take_remainder,
     string,
 };
 

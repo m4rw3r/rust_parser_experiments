@@ -205,6 +205,20 @@ pub fn take_till<'a, I: 'a + Copy, F>(m: Empty<'a, I>, f: F) -> Parser<'a, I, &'
     }
 }
 
+/// Matches the remainder of the buffer and returns it, always succeeds.
+/// 
+/// ```
+/// use parser::{Parser, take_remainder};
+/// 
+/// let p = From::from(b"abcd");
+/// 
+/// assert_eq!(take_remainder(p).unwrap(), b"abcd");
+/// ```
+#[inline]
+pub fn take_remainder<'a, I: Copy>(m: Empty<'a, I>) -> Parser<'a, I, &'a [I], Error<I>> {
+    Parser(&m.0[m.0.len() -1 ..], State::Ok(m.0))
+}
+
 /// Matches the given slice against the parser, returning the matched slice upon success.
 /// 
 /// If the length of the contained data is shorter than the given slice this parser is considered
