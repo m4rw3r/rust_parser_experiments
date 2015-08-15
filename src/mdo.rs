@@ -77,6 +77,7 @@ mod test {
         Parser,
         State,
         bind,
+        satisfy,
         ret,
     };
     use ::parsers::{
@@ -103,6 +104,30 @@ mod test {
         let Parser(buf, state) = mdo!(m,
             real = decimal;
                    char(b'.');
+            frac = decimal;
+
+            ret _, Error<_> : (real, frac)
+        );
+
+        assert_eq!(buf, &[b' ']);
+        assert_eq!(state, State::Ok((123, 4567)));
+    }
+    
+    #[test]
+    fn mdo_closure() {
+        fn decimal<'a>(m: Parser<'a, u8, (), ()>) -> Parser<'a, u8, usize, Error<u8>> {
+            mdo!{m,
+                 bytes = take_while1(|c| c >= b'0' && c <= b'9');
+
+                 ret bytes.iter().fold(0, |a, b| a * 10 + (b - b'0') as usize)
+            }
+        }
+
+        let m = From::from(b"123.4567 ");
+
+        let Parser(buf, state) = mdo!(m,
+            real = decimal;
+                   satisfy(|c| c == b'.');
             frac = decimal;
 
             ret _, Error<_> : (real, frac)
