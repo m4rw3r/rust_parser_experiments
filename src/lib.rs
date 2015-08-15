@@ -14,10 +14,10 @@ pub use functor::map;
 pub use monad::{bind, err, ret};
 
 pub use combinators::{
+    option,
+    or,
     many,
     many1,
-    or,
-    try,
 };
 pub use parsers::{
     any,

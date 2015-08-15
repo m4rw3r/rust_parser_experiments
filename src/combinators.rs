@@ -20,16 +20,16 @@ use ::iter::{
 /// Incomplete state is propagated.
 /// 
 /// ```
-/// use parser::{Parser, try, char};
+/// use parser::{Parser, option, char};
 /// 
 /// let p1 = From::from(b"abcd");
 /// let p2 = From::from(b"abcd");
 /// 
-/// assert_eq!(try(char(p1, b'c'), b'z').unwrap(), b'z');
-/// assert_eq!(try(char(p2, b'a'), b'z').unwrap(), b'a');
+/// assert_eq!(option(char(p1, b'c'), b'z').unwrap(), b'z');
+/// assert_eq!(option(char(p2, b'a'), b'z').unwrap(), b'a');
 /// ```
 #[inline]
-pub fn try<'a, I: 'a + Copy, T, E>(m: Parser<'a, I, T, E>, default: T) -> Parser<'a, I, T, E> {
+pub fn option<'a, I: 'a + Copy, T, E>(m: Parser<'a, I, T, E>, default: T) -> Parser<'a, I, T, E> {
     match m.1 {
         State::Ok(t)            => Parser(m.0, State::Ok(t)),
         // Failure, keep using the buffer, as it points on the next item even if that item failed
