@@ -19,6 +19,7 @@ pub use combinators::{
     or,
     many,
     many1,
+    skip_many,
 };
 pub use parsers::{
     any,

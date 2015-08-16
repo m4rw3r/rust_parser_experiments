@@ -28,6 +28,7 @@ use ::iter::{
 /// 
 /// assert_eq!(r, [b'a', b'a', b'a']);
 /// ```
+#[inline]
 pub fn count<'a, I: 'a + Copy, T, E, F, U>(m: Empty<'a, I>, num: usize, f: F) -> Parser<'a, I, T, Error<I>>
   where F: Fn(Empty<'a, I>) -> Parser<'a, I, U, E>,
         T: FromIterator<U> {
@@ -36,7 +37,7 @@ pub fn count<'a, I: 'a + Copy, T, E, F, U>(m: Empty<'a, I>, num: usize, f: F) ->
     let mut iter  = Iter::new(m.0, f);
 
     let result: T = FromIterator::from_iter(iter.by_ref().take(num).inspect(|_| count = count + 1 ));
-    
+
     match (count, iter.last_state()) {
         (i, IResult::Good) if i == num => Parser(iter.buffer(), State::Ok(result)),
         (_, IResult::Good)             => if iter.buffer().len() > 0 {
@@ -102,6 +103,8 @@ pub fn or<'a, I: 'a + Copy, T, E, F>(m: Parser<'a, I, T, E>, f: F) -> Parser<'a,
 /// Note: If the last parser succeeds on the last input item then this parser is still considered
 /// incomplete as there might be more data to fill.
 /// 
+/// Note: Allocates data.
+/// 
 /// ```
 /// use parser::{Error, Parser, bind, char, many, ret, take_while1};
 /// 
@@ -140,6 +143,8 @@ pub fn many<'a, I: 'a + Copy, T, E, F, U>(m: Empty<'a, I>, f: F) -> Parser<'a, I
 /// Note: If the last parser succeeds on the last input item then this parser is still considered
 /// incomplete as there might be more data to fill.
 /// 
+/// Note: Allocates data.
+/// 
 /// ```should_panic
 /// use parser::{Error, Parser, bind, char, many1, ret, take_while1};
 ///
@@ -173,4 +178,36 @@ pub fn many1<'a, I: 'a + Copy, T, E, F, U>(m: Empty<'a, I>, f: F) -> Parser<'a, 
         // TODO: Better error
         (false, _)                   => Parser(m.0, State::Err(m.0, Error::Many1Fail)),
     }
+}
+
+/// Runs the given parser until it fails, discarding matched input.
+/// 
+/// Incomplete state will be propagated.
+/// 
+/// This is more efficient to use compared to using ``many`` and then just discarding the result as
+/// ``many`` allocates a separate data structure to contain the data before proceeding.
+/// 
+/// ```
+/// use parser::{Parser, bind, skip_many, char};
+/// 
+/// let p = From::from(b"aaaabc");
+/// 
+/// assert_eq!(bind(skip_many(p, |m| char(m, b'a')), |m, _| char(m, b'b')).unwrap(), b'b');
+/// ```
+#[inline]
+pub fn skip_many<'a, I: 'a + Copy, T, E, F>(m: Empty<'a, I>, f: F) -> Parser<'a, I, (), Error<I>>
+  where F: Fn(Empty<'a, I>) -> Parser<'a, I, T, E> {
+    let Parser(buf_orig, _) = m;
+
+    let mut buf = buf_orig;
+
+    loop {
+        match f(Parser(buf, State::Ok(()))) {
+            Parser(b, State::Ok(_))            => buf = b,
+            Parser(_, State::Err(_, _))        => break,
+            Parser(_, State::Incomplete(i, n)) => return Parser(buf_orig, State::Incomplete(i, n)),
+        }
+    }
+
+    Parser(buf, State::Ok(()))
 }
