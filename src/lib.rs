@@ -181,6 +181,25 @@ pub mod functor {
 
 pub mod monad {
     //! Monad implementation for ``Parser``.
+    //! 
+    //! This monad implementation requires manual threading of the monad state to the nested
+    //! function ``f`` given to ``bind``. It is necessary since it is an eager monad and the nested
+    //! function ``f`` cannot return an action to be completed later in any effective way while
+    //! still allowing for ``rustc`` to optimize the code well. I did an earlier experiment with
+    //! laziness built-in, but that required lots of stakcking of nested structures to accomplish
+    //! the same thing instead of stacking functions. It was not at all as easy to use and usually
+    //! resulted in unwieldy stacks of structs.
+    //! 
+    //! Equivalence with Haskell's ``Monad`` typeclass:
+    //! 
+    //! ```ignore
+    //! f >>= g   ===  bind(f(m), g)
+    //! f >> g    ===  bind(f(m), |m, _| g(m))
+    //! return a  ===  ret(m, a)
+    //! fail a    ===  err(m, a)
+    //! ```
+    //! 
+    //! Do-notation is provided by the macro ``mdo!``.
     use ::Empty;
     use ::State;
     use ::Parser;
