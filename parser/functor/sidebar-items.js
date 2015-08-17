@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["map","Applies the function ``f`` to the wrapped value if the parser is in a success state, otherwise does nothing."]]});

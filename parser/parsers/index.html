@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `parsers` mod in crate `parser`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, parsers">
+
+    <title>parser::parsers - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../index.html'>parser</a></p><script>window.sidebarCurrent = {name: 'parsers', ty: 'mod', relpath: '../'};</script><script defer src="../sidebar-items.js"></script>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content mod">
+<h1 class='fqn'><span class='in-band'>Module <a href='../index.html'>parser</a>::<wbr><a class='mod' href=''>parsers</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-1069' class='srclink' href='../../src/parser/parsers.rs.html#1-342' title='goto source code'>[src]</a></span></h1>
+<div class='docblock'><p>Provided parsers.</p>
+</div><h2 id='functions' class='section-header'><a href="#functions">Functions</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.any.html'
+                               title='parser::parsers::any'>any</a></td>
+                        <td class='docblock short'>
+                             <p>Matches any item, returning it if present.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.char.html'
+                               title='parser::parsers::char'>char</a></td>
+                        <td class='docblock short'>
+                             <p>Matches a single character, returning the matched character on success.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.not_char.html'
+                               title='parser::parsers::not_char'>not_char</a></td>
+                        <td class='docblock short'>
+                             <p>Matches an item as long as it is not equal to <code>c</code>.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.peek.html'
+                               title='parser::parsers::peek'>peek</a></td>
+                        <td class='docblock short'>
+                             <p>Matches any item but does not consume it, on success it gives <code>Some</code> but if no input remains
+<code>None</code> is produced.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.satisfy.html'
+                               title='parser::parsers::satisfy'>satisfy</a></td>
+                        <td class='docblock short'>
+                             <p>Matches an item using <code>f</code>, the item is returned if <code>f</code> yields true, otherwise this parser
+fails.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.string.html'
+                               title='parser::parsers::string'>string</a></td>
+                        <td class='docblock short'>
+                             <p>Matches the given slice against the parser, returning the matched slice upon success.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.take.html'
+                               title='parser::parsers::take'>take</a></td>
+                        <td class='docblock short'>
+                             <p>Matches <code>num</code> items no matter what they are, returning a slice of the matched items.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.take_remainder.html'
+                               title='parser::parsers::take_remainder'>take_remainder</a></td>
+                        <td class='docblock short'>
+                             <p>Matches the remainder of the buffer and returns it, always succeeds.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.take_till.html'
+                               title='parser::parsers::take_till'>take_till</a></td>
+                        <td class='docblock short'>
+                             <p>Matches all items until <code>f</code> returns true, all items to that point will be returned as a slice
+upon success.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.take_while.html'
+                               title='parser::parsers::take_while'>take_while</a></td>
+                        <td class='docblock short'>
+                             <p>Matches all items while <code>f</code> returns false, returns a slice of all the matched items.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.take_while1.html'
+                               title='parser::parsers::take_while1'>take_while1</a></td>
+                        <td class='docblock short'>
+                             <p>Matches all items while <code>f</code> returns true, if at least one item matched this parser succeeds
+and returns a slice of all the matched items.</p>
+
+                        </td>
+                    </tr>
+                </table></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+            <p>
+                Search functions by type signature (e.g.
+                <code>vec -> usize</code>)
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../";
+        window.currentCrate = "parser";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../jquery.js"></script>
+    <script src="../../main.js"></script>
+    
+    <script async src="../../search-index.js"></script>
+</body>
+</html>

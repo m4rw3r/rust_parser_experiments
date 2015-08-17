@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `monad` mod in crate `parser`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, monad">
+
+    <title>parser::monad - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../index.html'>parser</a></p><script>window.sidebarCurrent = {name: 'monad', ty: 'mod', relpath: '../'};</script><script defer src="../sidebar-items.js"></script>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content mod">
+<h1 class='fqn'><span class='in-band'>Module <a href='../index.html'>parser</a>::<wbr><a class='mod' href=''>monad</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-3651' class='srclink' href='../../src/parser/lib.rs.html#182-356' title='goto source code'>[src]</a></span></h1>
+<div class='docblock'><p>Monad implementation for <code>Parser</code>.</p>
+
+<p>This monad implementation requires manual threading of the monad state to the nested
+function <code>f</code> given to <code>bind</code>. It is necessary since it is an eager monad and the nested
+function <code>f</code> cannot return an action to be completed later in any effective way while
+still allowing for <code>rustc</code> to optimize the code well. I did an earlier experiment with
+laziness built-in, but that required lots of stakcking of nested structures to accomplish
+the same thing instead of stacking functions. It was not at all as easy to use and usually
+resulted in unwieldy stacks of structs.</p>
+
+<h1 id="equivalence-with-haskell&#39;s-monad-typeclass:" class='section-header'><a
+                           href="#equivalence-with-haskell&#39;s-monad-typeclass:">Equivalence with Haskell&#39;s <code>Monad</code> typeclass:</a></h1><pre class='rust rust-example-rendered'>
+<span class='ident'>f</span> <span class='op'>&gt;&gt;=</span> <span class='ident'>g</span>   <span class='op'>==</span><span class='op'>=</span>  <span class='ident'>bind</span>(<span class='ident'>f</span>(<span class='ident'>m</span>), <span class='ident'>g</span>)
+<span class='ident'>f</span> <span class='op'>&gt;&gt;</span> <span class='ident'>g</span>    <span class='op'>==</span><span class='op'>=</span>  <span class='ident'>bind</span>(<span class='ident'>f</span>(<span class='ident'>m</span>), <span class='op'>|</span><span class='ident'>m</span>, _<span class='op'>|</span> <span class='ident'>g</span>(<span class='ident'>m</span>))
+<span class='kw'>return</span> <span class='ident'>a</span>  <span class='op'>==</span><span class='op'>=</span>  <span class='ident'>ret</span>(<span class='ident'>m</span>, <span class='ident'>a</span>)
+<span class='ident'>fail</span> <span class='ident'>a</span>    <span class='op'>==</span><span class='op'>=</span>  <span class='ident'>err</span>(<span class='ident'>m</span>, <span class='ident'>a</span>)
+</pre>
+
+<p>Do-notation is provided by the macro <code>mdo!</code>.</p>
+
+<h1 id="satisfies-the-monad-laws:" class='section-header'><a
+                           href="#satisfies-the-monad-laws:">Satisfies the monad laws:</a></h1>
+<p>Left identity:  <code>return a &gt;&gt;= f ≡ f a</code></p>
+
+<p>Right identity: <code>m &gt;&gt;= return ≡ m</code></p>
+
+<p>Associativity:  <code>(m &gt;&gt;= f) &gt;&gt;= g ≡ m &gt;&gt;= (\x -&gt; f x &gt;&gt;= g)</code></p>
+</div><h2 id='functions' class='section-header'><a href="#functions">Functions</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.bind.html'
+                               title='parser::monad::bind'>bind</a></td>
+                        <td class='docblock short'>
+                             <p>Applies the function <code>f</code> on the value in the parser <code>m</code>, the first parameter to <code>f</code> is
+the context of the parser, to be used for continued processing and the second parameter is the
+value contained in <code>m</code>.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.err.html'
+                               title='parser::monad::err'>err</a></td>
+                        <td class='docblock short'>
+                             <p>Constructs an error value from the given error <code>err</code>.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.ret.html'
+                               title='parser::monad::ret'>ret</a></td>
+                        <td class='docblock short'>
+                             <p>Constructs a success value from the given <code>value</code>.</p>
+
+                        </td>
+                    </tr>
+                </table></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+            <p>
+                Search functions by type signature (e.g.
+                <code>vec -> usize</code>)
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../";
+        window.currentCrate = "parser";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../jquery.js"></script>
+    <script src="../../main.js"></script>
+    
+    <script async src="../../search-index.js"></script>
+</body>
+</html>

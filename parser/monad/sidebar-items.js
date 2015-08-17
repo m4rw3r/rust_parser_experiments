@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["bind","Applies the function ``f`` on the value in the parser ``m``, the first parameter to ``f`` is the context of the parser, to be used for continued processing and the second parameter is the value contained in ``m``."],["err","Constructs an error value from the given error ``err``."],["ret","Constructs a success value from the given ``value``."]]});
