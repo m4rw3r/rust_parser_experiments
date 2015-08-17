@@ -190,7 +190,7 @@ pub mod monad {
     //! the same thing instead of stacking functions. It was not at all as easy to use and usually
     //! resulted in unwieldy stacks of structs.
     //! 
-    //! Equivalence with Haskell's ``Monad`` typeclass:
+    //! # Equivalence with Haskell's ``Monad`` typeclass:
     //! 
     //! ```ignore
     //! f >>= g   ===  bind(f(m), g)
@@ -198,8 +198,16 @@ pub mod monad {
     //! return a  ===  ret(m, a)
     //! fail a    ===  err(m, a)
     //! ```
-    //! 
+    //!
     //! Do-notation is provided by the macro ``mdo!``.
+    //!
+    //! # Satisfies the monad laws:
+    //! 
+    //! Left identity:  ``return a >>= f   ≡  f a``
+    //! 
+    //! Right identity: ``m >>= return     ≡  m``
+    //! 
+    //! Associativity:  ``(m >>= f) >>= g  ≡  m >>= (\x -> f x >>= g)``
     use ::Empty;
     use ::State;
     use ::Parser;
@@ -242,6 +250,13 @@ pub mod monad {
         Parser(m.0, State::Ok(value))
     }
 
+    impl<'a, I: 'a + Copy> Empty<'a, I> {
+        #[inline]
+        fn ret<T, E>(self, value: T) -> Parser<'a, I, T, E> {
+            Parser(self.0, State::Ok(value))
+        }
+    }
+
     /// Constructs an error value from the given error ``err``.
     /// 
     /// Currently this function may need type-annotation for the second type-parameter ``T`` because
@@ -259,6 +274,84 @@ pub mod monad {
     #[inline]
     pub fn err<'a, I: 'a + Copy, T, E>(m: Empty<'a, I>, err: E) -> Parser<'a, I, T, E> {
         Parser(m.0, State::Err(m.0, err))
+    }
+    
+    #[cfg(test)]
+    mod test {
+        use ::{Empty, Error, Parser, State, bind, ret};
+
+        #[test]
+        fn left_identity() {
+            // Using different types here just to make sure it typechecks correctly
+            fn f<'a, I: 'a + Copy>(m: Empty<'a, I>, num: u32) -> Parser<'a, I, u64, Error<()>> {
+                Parser::ret(m, (num + 1) as u64)
+            }
+
+            let a   = 123;
+            let lhs = From::from(b"abc");
+            let rhs = From::from(b"abc");
+
+            // return a >>= f
+            let Parser(lhs_buf, lhs_state) = bind(ret(lhs, a), f);
+            // f a
+            let Parser(rhs_buf, rhs_state) = f(rhs, a);
+
+            assert_eq!(lhs_buf, b"abc" as &[u8]);
+            assert_eq!(rhs_buf, b"abc" as &[u8]);
+            assert_eq!(lhs_state, State::Ok(124u64));
+            assert_eq!(rhs_state, State::Ok(124u64));
+        }
+
+        /// Test for right identity monad law.
+        /// 
+        /// ```ignore
+        /// m >>= return  ≡  m
+        /// ```
+        #[test]
+        fn right_identity() {
+            let lhs: Parser<_, _, Error<()>> = Parser(b"abc" as &[u8], State::Ok("data"));
+            let rhs: Parser<_, _, Error<()>> = Parser(b"abc" as &[u8], State::Ok("data"));
+
+            // m >>= return
+            // TODO:Any way to get rid of this type-annotation?
+            let Parser(lhs_buf, lhs_state): Parser<_, _, Error<()>> = bind(lhs, Parser::ret);
+            // m
+            let Parser(rhs_buf, rhs_state) = rhs;
+
+            assert_eq!(lhs_buf,   b"abc" as &[u8]);
+            assert_eq!(rhs_buf,   b"abc" as &[u8]);
+            assert_eq!(lhs_state, State::Ok("data"));
+            assert_eq!(rhs_state, State::Ok("data"));
+        }
+
+        /// Test for associativity monad law.
+        /// 
+        /// ```ignore
+        /// (m >>= f) >>= g  ≡  m >>= (\x -> f x >>= g)
+        /// ```
+        #[test]
+        fn associativity() {
+            fn f<'a, I: 'a + Copy>(m: Empty<'a, I>, num: u32) -> Parser<'a, I, u64, Error<()>> {
+                ret(m, (num + 1) as u64)
+            }
+
+            fn g<'a, I: 'a + Copy>(m: Empty<'a, I>, num: u64) -> Parser<'a, I, u64, Error<()>> {
+                ret(m, num * 2)
+            }
+
+            let lhs: Parser<_, _, Error<()>> = Parser(b"abc" as &[u8], State::Ok(2));
+            let rhs: Parser<_, _, Error<()>> = Parser(b"abc" as &[u8], State::Ok(2));
+
+            // (m >>= f) >>= g
+            let Parser(lhs_buf, lhs_state) = bind(bind(lhs, f), g);
+            // m >>= (\x -> f x >> g)
+            let Parser(rhs_buf, rhs_state) = bind(rhs, |m, x| bind(f(m, x), g));
+
+            assert_eq!(lhs_buf,   b"abc" as &[u8]);
+            assert_eq!(rhs_buf,   b"abc" as &[u8]);
+            assert_eq!(lhs_state, State::Ok(6));
+            assert_eq!(rhs_state, State::Ok(6));
+        }
     }
 }
 
