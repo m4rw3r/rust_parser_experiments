@@ -9,7 +9,7 @@
 /// fn main() {
 ///     use parser::{Parser, State, bind, ret, char, any};
 ///
-///     let r = mdo!{
+///     let parser = || mdo!{
 ///         let first  = any();
 ///                      char(b':');
 ///         let second = any();
@@ -17,8 +17,8 @@
 ///         ret (first, second)
 ///     };
 ///
-///     assert_eq!(r.parse(b"a:b"), (State::Item((b'a', b'b')), b"" as &[u8]));
-///     assert_eq!(r.parse(b"a:b"), (State::Item((b'a', b'b')), b"" as &[u8]));
+///     assert_eq!(parser().parse(b"a:b"), (State::Item((b'a', b'b')), b"" as &[u8]));
+///     assert_eq!(parser().parse(b"a:b"), (State::Item((b'a', b'b')), b"" as &[u8]));
 /// }
 /// ```
 #[macro_export]

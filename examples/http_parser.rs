@@ -91,7 +91,7 @@ fn message_header<'a>() -> Parser<'a, 'a, u8, Header<'a>, Error<u8>> {
     mdo!{
         let name  = take_while1(is_token);
                     char(b':');
-        let lines = many1(message_header_line());
+        let lines = many1(message_header_line);
 
         ret Header {
             name:  name,
@@ -104,7 +104,7 @@ fn request<'a>() -> Parser<'a, 'a, u8, (Request<'a>, Vec<Header<'a>>), Error<u8>
     mdo!{
         let r = request_line();
                 end_of_line();
-        let h = many(message_header());
+        let h = many(message_header);
                 end_of_line();
 
         // FIXME: For some reason this line requires clone
@@ -123,9 +123,7 @@ fn main() {
         let _ = file.read_to_end(&mut contents).unwrap();
     }
 
-    let p = request();
-
-    let i = parser::iter::Iter::new(&contents, &p);
+    let i = parser::iter::Iter::new(&contents, request);
 
     println!("num: {}", i.count());
 }

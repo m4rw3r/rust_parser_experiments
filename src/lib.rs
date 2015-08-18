@@ -1,3 +1,5 @@
+#![feature(fnbox)]
+use std::boxed::FnBox;
 pub mod mdo;
 
 pub use combinators::{
@@ -25,7 +27,7 @@ pub enum State<T, E> {
 
 // type Parser<'a, I, T, E> = Fn(&'a [I]) -> (State<T, E>, &'a [I]);
 
-pub struct Parser<'a, 'b, I, T, E>(Box<Fn(&'a [I]) -> (State<T, E>, &'a [I]) + 'b>)
+pub struct Parser<'a, 'b, I, T, E>(Box<FnBox(&'a [I]) -> (State<T, E>, &'a [I]) + 'b>)
   where I: 'a + Copy,
         T: 'b;
 
@@ -33,7 +35,7 @@ impl<'a, 'b, I, T, E> Parser<'a, 'b, I, T, E>
   where I: 'a + Copy,
         T: 'b {
     #[inline]
-    pub fn parse(&self, buf: &'a [I]) -> (State<T, E>, &'a [I]) {
+    pub fn parse(self, buf: &'a [I]) -> (State<T, E>, &'a [I]) {
         self.0(buf)
     }
 }
@@ -48,19 +50,19 @@ impl<'a, 'b, I, T, E> Parser<'a, 'b, I, T, E>
 #[inline]
 pub fn ret<'a, 'b, I, T, E>(value: T) -> Parser<'a, 'b, I, T, E>
   where I: 'a + Copy,
-        T: 'b + Clone {
-    Parser(Box::new(move |i| (State::Item(value.clone()), i)))
+        T: 'b {
+    Parser(Box::new(move |i| (State::Item(value), i)))
 }
 
 // TODO: Lifetimes are odd here, fix them, the contained value should not need to have exactly the
 // same lifetime as the input stream
 #[inline]
-pub fn bind<'a, I, T, E, U, F>(p: Parser<'a, 'a, I, T, E>, f: F) -> Parser<'a, 'a, I, U, E>
+pub fn bind<'a, 'b: 'a, I, T, E, U, F>(p: Parser<'a, 'a, I, T, E>, f: F) -> Parser<'a, 'a, I, U, E>
   where I: 'a + Copy,
-        T: 'a,
-        U: 'a,
-        E: 'a,
-        F: Fn(T) -> Parser<'a, 'a, I, U, E> + 'a {
+        T: 'b,
+        U: 'b,
+        E: 'b,
+        F: FnOnce(T) -> Parser<'a, 'b, I, U, E> + 'b {
     Parser(Box::new(move |i| {
         let (a, is) = p.parse(i);
 
@@ -156,15 +158,20 @@ pub mod combinators {
     /// ```
     /// use parser::{Error, State, char, many};
     /// 
-    /// let a: (State<Vec<u8>, _>, _) = many(char(b'a')).parse(b"aab");
-    /// let b: (State<Vec<u8>, _>, _) = many(char(b'a')).parse(b"bcd");
+    /// let a: (State<Vec<u8>, _>, _) = many(|| char(b'a')).parse(b"aab");
+    /// let b: (State<Vec<u8>, _>, _) = many(|| char(b'a')).parse(b"bcd");
     /// 
     /// assert_eq!(a, (State::Item(vec![b'a', b'a']), b"b" as &[u8]));
     /// assert_eq!(b, (State::Item(vec![]), b"bcd" as &[u8]));
     /// ```
     #[inline]
-    pub fn many<'a, I: 'a + Copy, T: 'a, E: 'a, U>(parser: Parser<'a, 'a, I, U, E>) -> Parser<'a, 'a, I, T, Error<I>>
-      where T: FromIterator<U> {
+    // pub fn many<'a, I: 'a + Copy, T: 'a, E: 'a, U>(parser: Parser<'a, 'a, I, U, E>) -> Parser<'a, 'a, I, T, Error<I>>
+    //   where T: FromIterator<U> {
+    pub fn many<'a, I, T, E: 'a, U, F>(parser: F) -> Parser<'a, 'a, I, T, Error<I>>
+      where I: Copy + 'a,
+            T: FromIterator<U> + 'a,
+            U: 'a,
+            F: Fn() -> Parser<'a, 'a, I, U, E> + 'a {
         Parser(Box::new(move |i: &'a [I]| {
             let mut iter = Iter::new(i, &parser);
 
@@ -184,15 +191,20 @@ pub mod combinators {
     /// ```
     /// use parser::{Error, State, char, many1};
     /// 
-    /// let a: (State<Vec<u8>, _>, _) = many1(char(b'a')).parse(b"aab");
-    /// let b: (State<Vec<u8>, _>, _) = many1(char(b'a')).parse(b"bcd");
+    /// let a: (State<Vec<u8>, _>, _) = many1(|| char(b'a')).parse(b"aab");
+    /// let b: (State<Vec<u8>, _>, _) = many1(|| char(b'a')).parse(b"bcd");
     /// 
     /// assert_eq!(a, (State::Item(vec![b'a', b'a']), b"b" as &[u8]));
     /// assert_eq!(b, (State::Error(Error::Many1Fail), b"bcd" as &[u8]));
     /// ```
     #[inline]
-    pub fn many1<'a, I: 'a + Copy, T: 'a, E: 'a, U>(parser: Parser<'a, 'a, I, U, E>) -> Parser<'a, 'a, I, T, Error<I>>
-      where T: FromIterator<U> {
+    // pub fn many1<'a, I: 'a + Copy, T: 'a, E: 'a, U>(parser: Parser<'a, 'a, I, U, E>) -> Parser<'a, 'a, I, T, Error<I>>
+    //   where T: FromIterator<U> {
+    pub fn many1<'a, I, T, E: 'a, U, F>(parser: F) -> Parser<'a, 'a, I, T, Error<I>>
+      where I: Copy + 'a,
+            T: FromIterator<U> + 'a,
+            U: 'a,
+            F: Fn() -> Parser<'a, 'a, I, U, E> + 'a {
         Parser(Box::new(move |i: &'a [I]| {
             // If we have gotten an item, if this is false after from_iter we have failed
             let mut item = false;
@@ -226,18 +238,20 @@ pub mod iter {
         Incomplete,
     }
 
-    pub struct Iter<'a: 'b, 'b, I: 'a + Copy, T: 'b, E: 'b> {
+    pub struct Iter<'a, I: 'a + Copy, T, E, F>
+      where F: Fn() -> Parser<'a, 'a, I, T, E> {
         last:   IResult,
-        parser: &'b Parser<'a, 'b, I, T, E>,
+        parser: Box<F>,
         buf:    &'a [I]
     }
 
-    impl<'a: 'b, 'b, I: 'a + Copy, T: 'b, E: 'b> Iter<'a, 'b, I, T, E> {
+    impl<'a, I: 'a + Copy, T, E, F> Iter<'a, I, T, E, F>
+      where F: Fn() -> Parser<'a, 'a, I, T, E> {
         #[inline]
-        pub fn new(buffer: &'a [I], parser: &'b Parser<'a, 'b, I, T, E>) -> Self {
+        pub fn new(buffer: &'a [I], parser: F) -> Self {
             Iter {
                 last:   IResult::Good,
-                parser: parser,
+                parser: Box::new(parser),
                 buf:    buffer,
             }
         }
@@ -253,7 +267,8 @@ pub mod iter {
         }
     }
 
-    impl<'a, 'b, I: 'a + Copy, T: 'b, E> Iterator for Iter<'a, 'b, I, T, E> {
+    impl<'a, I: 'a + Copy, T, E, F> Iterator for Iter<'a, I, T, E, F>
+      where F: Fn() -> Parser<'a, 'a, I, T, E> {
         type Item = T;
 
         #[inline]
@@ -262,7 +277,7 @@ pub mod iter {
                 return None
             }
 
-            let (r, b) = self.parser.parse(self.buf);
+            let (r, b) = (self.parser)().parse(self.buf);
 
             match r {
                 State::Item(v)      => {
