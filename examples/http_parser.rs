@@ -17,16 +17,14 @@ use parser::*;
 use std::fs::File;
 use std::env;
 
-// FIXME: Remove the clone and copy
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 struct Request<'a> {
     method:  &'a [u8],
     uri:     &'a [u8],
     version: &'a [u8],
 }
 
-// FIXME: Remove the clone
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Header<'a> {
     name:  &'a [u8],
     value: Vec<&'a [u8]>,
@@ -107,8 +105,7 @@ fn request<'a>() -> Parser<'a, 'a, u8, (Request<'a>, Vec<Header<'a>>), Error<u8>
         let h = many(message_header);
                 end_of_line();
 
-        // FIXME: For some reason this line requires clone
-        ret (r, Clone::clone(&h))
+        ret (r, h)
     }
 }
 
