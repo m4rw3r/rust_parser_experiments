@@ -1,6 +1,7 @@
 use Parser;
 use State;
 use Input;
+use error;
 use error::Error;
 
 #[inline]
@@ -12,8 +13,11 @@ pub fn any<'a, I>(m: Input<'a, I>) -> Parser<'a, I, I, Error<I>>
 #[inline]
 pub fn char<'a, I>(m: Input<'a, I>, chr: I) -> Parser<'a, I, I, Error<I>>
   where I: Copy + Eq {
-    // TODO: Error with expected char
-    satisfy(m, |c| c == chr)
+    match m.0.first() {
+        Some(&c) if chr == c => Parser(State::Item(&m.0[1..], c)),
+        Some(_)              => Parser(State::Error(m.0, error::expected(chr))),
+        None                 => Parser(State::Incomplete(1)),
+    }
 }
 
 #[inline]
@@ -75,7 +79,7 @@ pub fn string<'a, I>(m: Input<'a, I>, s: &[I]) -> Parser<'a, I, &'a [I], Error<I
 
     for i in 0..s.len() {
         if s[i] != d[i] {
-            return Parser(State::Error(&m.0[i..], Error::Expected(s[i])));
+            return Parser(State::Error(&m.0[i..], error::string(s[i])));
         }
     }
 

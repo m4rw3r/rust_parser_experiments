@@ -4,4 +4,4 @@ version = "0.0.1"
 authors = ["Martin Wernstål <m4rw3r@gmail.com>"]
 
 [features]
-nested_error = []
+verbose_error = []

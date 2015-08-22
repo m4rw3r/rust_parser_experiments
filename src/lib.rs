@@ -1,3 +1,6 @@
+#[allow(unused_attributes)]
+#[cfg_attr(feature = "verbose_error", path = "error_verbose.rs")]
+mod error;
 mod mdo;
 
 pub mod combinator;
@@ -11,35 +14,8 @@ pub use monad::{
     ret,
 };
 
+// Only export error publicly.
 pub use error::Error;
-
-#[cfg(not(feature = "nested_error"))]
-mod error {
-    #[derive(Debug, Eq, PartialEq)]
-    pub enum Error<I> {
-        Unexpected,
-        Expected(I),
-        Many1
-    }
-}
-
-#[cfg(feature = "nested_error")]
-mod error {
-    use std::error;
-
-    #[derive(Debug)]
-    pub enum Error<'a, I>
-      where I: 'a {
-        Expected,
-        Unexpected(I),
-        Many1(ErrorPosition<'a, I, Box<error::Error>>),
-    }
-
-    #[derive(Debug)]
-    pub struct ErrorPosition<'a, I, E>(&'a [I], E)
-      where I: 'a,
-            E: Sized;
-}
 
 #[derive(Debug, Eq, PartialEq)]
 enum State<'a, I, T, E>

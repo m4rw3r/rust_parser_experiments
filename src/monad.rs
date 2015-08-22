@@ -25,7 +25,6 @@ pub fn ret<'a, I, T, E>(m: Input<'a, I>, t: T) -> Parser<'a, I, T, E> {
 mod test {
     use super::{
         bind,
-        err,
         ret,
     };
     use ::Input;

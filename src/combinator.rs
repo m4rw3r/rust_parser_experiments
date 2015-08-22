@@ -1,5 +1,7 @@
 use std::iter::FromIterator;
 
+use error;
+
 use Input;
 use Parser;
 use State;
@@ -34,7 +36,8 @@ pub fn many<'a, I, T, E, F, U>(m: Input<'a, I>, f: F) -> Parser<'a, I, T, E>
     match iter.last_state() {
         // We haven't read everything yet
         IResult::Good       => Parser(State::Incomplete(1)),
-        // Ok, last parser failed, we have iterated all
+        // Ok, last parser failed, we have iterated all.
+        // Return remainder of buffer and the collected result
         IResult::Bad        => Parser(State::Item(iter.buffer(), result)),
         // Nested parser incomplete, propagate
         IResult::Incomplete => Parser(State::Incomplete(1)),
@@ -59,6 +62,6 @@ pub fn many1<'a, I, T, E, F, U>(m: Input<'a, I>, f: F) -> Parser<'a, I, T, Error
         (true, IResult::Bad)        => Parser(State::Item(iter.buffer(), result)),
         // Nested parser incomplete, propagate
         (_,    IResult::Incomplete) => Parser(State::Incomplete(1)),
-        (false, _)                  => Parser(State::Error(m.0, Error::Many1)),
+        (false, _)                  => Parser(State::Error(m.0, error::many1())),
     }
 }
