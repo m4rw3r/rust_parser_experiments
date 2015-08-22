@@ -1,10 +1,13 @@
 use std::iter::FromIterator;
 
+#[cfg(not(feature = "verbose_error"))]
 use error;
 
 use Input;
 use Parser;
 use State;
+
+#[cfg(not(feature = "verbose_error"))]
 use Error;
 
 use iter::Iter;
@@ -44,6 +47,7 @@ pub fn many<'a, I, T, E, F, U>(m: Input<'a, I>, f: F) -> Parser<'a, I, T, E>
     }
 }
 
+#[cfg(not(feature = "verbose_error"))]
 #[inline]
 pub fn many1<'a, I, T, E, F, U>(m: Input<'a, I>, f: F) -> Parser<'a, I, T, Error<I>>
   where I: Copy,
@@ -57,11 +61,37 @@ pub fn many1<'a, I, T, E, F, U>(m: Input<'a, I>, f: F) -> Parser<'a, I, T, Error
 
     match (item, iter.last_state()) {
         // We haven't read everything yet
-        (true, IResult::Good)       => Parser(State::Incomplete(1)),
+        (true,  IResult::Good)       => Parser(State::Incomplete(1)),
         // Ok, last parser failed, we have iterated all
-        (true, IResult::Bad)        => Parser(State::Item(iter.buffer(), result)),
+        (true,  IResult::Bad)        => Parser(State::Item(iter.buffer(), result)),
         // Nested parser incomplete, propagate
-        (_,    IResult::Incomplete) => Parser(State::Incomplete(1)),
-        (false, _)                  => Parser(State::Error(m.0, error::many1())),
+        (_,     IResult::Incomplete) => Parser(State::Incomplete(1)),
+        (false, _)                   => Parser(State::Error(m.0, error::many1())),
+    }
+}
+
+#[cfg(feature = "verbose_error")]
+#[inline]
+pub fn many1<'a, I, T, E, F, U>(m: Input<'a, I>, f: F) -> Parser<'a, I, T, E>
+  where I: Copy,
+        F: Fn(Input<'a, I>) -> Parser<'a, I, U, E>,
+        T: FromIterator<U> {
+    // If we have gotten an item, if this is false after from_iter we have failed
+    let mut item = false;
+    let mut iter = Iter::new(m.0, f);
+
+    let result: T = FromIterator::from_iter(iter.by_ref().inspect(|_| item = true ));
+
+    match (item, iter.last_state()) {
+        // We haven't read everything yet
+        (true,  IResult::Good)       => Parser(State::Incomplete(1)),
+        // Ok, last parser failed, we have iterated all
+        (true,  IResult::Bad)        => Parser(State::Item(iter.buffer(), result)),
+        // First parse failed, propagate error
+        (false, IResult::Bad)        => Parser(State::Error(iter.buffer(), iter.error().unwrap())),
+        // Should not be possible as long as next() is called
+        (false, IResult::Good)       => unreachable!(),
+        // Nested parser incomplete, propagate
+        (_,     IResult::Incomplete) => Parser(State::Incomplete(1)),
     }
 }

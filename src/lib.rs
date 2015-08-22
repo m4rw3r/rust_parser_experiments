@@ -1,6 +1,3 @@
-#[allow(unused_attributes)]
-#[cfg_attr(feature = "verbose_error", path = "error_verbose.rs")]
-mod error;
 mod mdo;
 
 pub mod combinator;
@@ -47,5 +44,69 @@ impl<'a, I, R> From<&'a R> for Input<'a, I>
         R: 'a + AsRef<[I]>{
     fn from(buf: &'a R) -> Input<'a, I> {
         Input(buf.as_ref())
+    }
+}
+
+#[cfg(feature = "verbose_error")]
+mod error {
+    //! This is a private module to contain the more verbose error type as well as adapters for
+    //! using it.
+    //! 
+    //! All adapters are #inline(always) and will construct the appropriate error type.
+    use std::fmt;
+
+    #[derive(Debug, Eq, PartialEq)]
+    pub enum Error<I> {
+        Expected(I),
+        Unexpected,
+        String(Vec<I>),
+    }
+
+    impl<I> fmt::Display for Error<I>
+      where I: fmt::Debug {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            match self {
+                &Error::Expected(ref c) => write!(f, "expected {:?}", *c),
+                &Error::Unexpected      => write!(f, "unexpected"),
+                &Error::String(ref s)   => write!(f, "expected {:?}", *s),
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub fn expected<'a, I>(i: I) -> Error<I> {
+        Error::Expected(i)
+    }
+
+
+    #[inline(always)]
+    pub fn string<I>(c: &[I]) -> Error<I>
+      where I: Copy {
+        Error::String(c.to_vec())
+    }
+}
+
+#[cfg(not(feature = "verbose_error"))]
+mod error {
+    //! This is a private module to contain the smaller error type as well as adapters for using
+    //! it.
+    //! 
+    //! All adapters are #inline(always), and will just noop the data.
+    use std::marker::PhantomData;
+
+    #[derive(Debug, Eq, PartialEq)]
+    pub enum Error<I> {
+        Unexpected,
+        Many1(PhantomData<I>),
+    }
+
+    #[inline(always)]
+    pub fn expected<'a, I>(_: I) -> Error<I> {
+        Error::Unexpected
+    }
+
+    #[inline(always)]
+    pub fn many1<'a, I>() -> Error<I> {
+        Error::Many1(PhantomData)
     }
 }

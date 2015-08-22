@@ -68,6 +68,7 @@ pub fn take_till<'a, I, F>(m: Input<'a, I>, f: F) -> Parser<'a, I, &'a [I], Erro
     }
 }
 
+#[cfg(feature = "verbose_error")]
 #[inline]
 pub fn string<'a, I>(m: Input<'a, I>, s: &[I]) -> Parser<'a, I, &'a [I], Error<I>>
   where I: Copy + Eq {
@@ -79,7 +80,26 @@ pub fn string<'a, I>(m: Input<'a, I>, s: &[I]) -> Parser<'a, I, &'a [I], Error<I
 
     for i in 0..s.len() {
         if s[i] != d[i] {
-            return Parser(State::Error(&m.0[i..], error::string(s[i])));
+            return Parser(State::Error(m.0, error::string(s)));
+        }
+    }
+
+    Parser(State::Item(&m.0[s.len()..], d))
+}
+
+#[cfg(not(feature = "verbose_error"))]
+#[inline]
+pub fn string<'a, I>(m: Input<'a, I>, s: &[I]) -> Parser<'a, I, &'a [I], Error<I>>
+  where I: Copy + Eq {
+    if s.len() > m.0.len() {
+        return Parser(State::Incomplete(s.len() - m.0.len()));
+    }
+
+    let d = &m.0[..s.len()];
+
+    for i in 0..s.len() {
+        if s[i] != d[i] {
+            return Parser(State::Error(&m.0[i..], Error::Unexpected));
         }
     }
 
