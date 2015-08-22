@@ -1,4 +1,9 @@
+mod mdo;
+
+pub mod combinator;
+pub mod iter;
 pub mod monad;
+pub mod parser;
 
 pub use monad::{
     bind,
@@ -6,12 +11,14 @@ pub use monad::{
     ret,
 };
 
+pub use error::Error;
+
 #[cfg(not(feature = "nested_error"))]
 mod error {
     #[derive(Debug, Eq, PartialEq)]
     pub enum Error<I> {
+        Unexpected,
         Expected(I),
-        Unexpected(I),
         Many1
     }
 }
@@ -23,20 +30,25 @@ mod error {
     #[derive(Debug)]
     pub enum Error<'a, I>
       where I: 'a {
-        Expected(I),
+        Expected,
         Unexpected(I),
-        Many1(ErrorPosition<'a, I>),
+        Many1(ErrorPosition<'a, I, Box<error::Error>>),
     }
 
     #[derive(Debug)]
-    pub struct ErrorPosition<'a, I>(&'a [I], Box<error::Error>)
-      where I: 'a;
+    pub struct ErrorPosition<'a, I, E>(&'a [I], E)
+      where I: 'a,
+            E: Sized;
 }
 
 #[derive(Debug, Eq, PartialEq)]
 enum State<'a, I, T, E>
   where I: 'a {
+    /// Success state, slice is the slice of the input data starting just after the last successful
+    /// parser.
     Item(&'a [I], T),
+    /// Error state, slice is the slice of the input data from the position where the error
+    /// occurred.
     Error(&'a [I], E),
     // Do not include data-slice here as we do not need to actually return the part which is
     // incomplete. The parse has to restart anyway from the index where it was.

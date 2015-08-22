@@ -5,7 +5,7 @@ use ::State;
 pub fn bind<'a, I, T, E, F, U, V>(m: Parser<'a, I, T, E>, f: F) -> Parser<'a, I, U, V>
   where I: 'a,
         V: From<E>,
-        F: Fn(Input<'a, I>, T) -> Parser<'a, I, U, V> {
+        F: FnOnce(Input<'a, I>, T) -> Parser<'a, I, U, V> {
     match m.0 {
         State::Item(b, t)    => f(Input(b), t),
         State::Error(b, e)   => Parser(State::Error(b, From::from(e))),
