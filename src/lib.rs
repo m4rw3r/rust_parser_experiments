@@ -11,6 +11,22 @@ pub use monad::{
     ret,
 };
 
+pub use combinator::{
+    or,
+    many,
+    many1,
+};
+
+pub use parser::{
+    any,
+    char,
+    satisfy,
+    take_while,
+    take_while1,
+    take_till,
+    string,
+};
+
 // Only export error publicly.
 pub use error::Error;
 
@@ -32,6 +48,18 @@ enum State<'a, I, T, E>
 #[must_use]
 pub struct Parser<'a, I, T, E>(State<'a, I, T, E>)
   where I: 'a;
+
+impl<'a, I, T, E> Parser<'a, I, T, E> {
+    pub fn unwrap(self) -> T {
+        match self.0 {
+            State::Item(_, t)    => t,
+            // TODO: Print error
+            State::Error(_, _)   => panic!("Parser is in error state"),
+            // TODO Print incomplete info
+            State::Incomplete(_) => panic!("Parser is in incomplete state"),
+        }
+    }
+}
 
 // Newtype wrapper around parser input to avoid arbitrary slice to replace our actual input.
 #[must_use]
