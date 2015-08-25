@@ -60,7 +60,7 @@ pub fn satisfy<'a, I, F>(m: Input<'a, I>, f: F) -> Parser<'a, I, I, Error<I>>
         F: FnOnce(I) -> bool {
     match m.0.first() {
         Some(&c) if f(c) => Parser(State::Item(&m.0[1..], c)),
-        Some(_)          => Parser(State::Error(m.0, Error::Unexpected)),
+        Some(_)          => Parser(State::Error(m.0, error::unexpected())),
         None             => Parser(State::Incomplete(1)),
     }
 }
@@ -117,7 +117,7 @@ pub fn take_while1<'a, I, F>(m: Input<'a, I>, f: F) -> Parser<'a, I, &'a [I], Er
   where I: Copy,
         F: Fn(I) -> bool {
     match m.0.iter().position(|&c| f(c) == false) {
-        Some(0) => Parser(State::Error(m.0, Error::Unexpected)),
+        Some(0) => Parser(State::Error(m.0, error::unexpected())),
         Some(n) => Parser(State::Item(&m.0[n..], &m.0[..n])),
         // TODO: Should this following 1 be something else, seeing as take_while1 is potentially
         // infinite?
@@ -162,7 +162,6 @@ pub fn take_till<'a, I, F>(m: Input<'a, I>, f: F) -> Parser<'a, I, &'a [I], Erro
 /// 
 /// assert_eq!(string(p, b"abc").unwrap(), b"abc");
 /// ```
-#[cfg(feature = "verbose_error")]
 #[inline]
 pub fn string<'a, I>(m: Input<'a, I>, s: &[I]) -> Parser<'a, I, &'a [I], Error<I>>
   where I: Copy + Eq {
@@ -174,38 +173,7 @@ pub fn string<'a, I>(m: Input<'a, I>, s: &[I]) -> Parser<'a, I, &'a [I], Error<I
 
     for i in 0..s.len() {
         if s[i] != d[i] {
-            return Parser(State::Error(m.0, error::string(s)));
-        }
-    }
-
-    Parser(State::Item(&m.0[s.len()..], d))
-}
-
-/// Matches the given slice against the parser, returning the matched slice upon success.
-/// 
-/// If the length of the contained data is shorter than the given slice this parser is considered
-/// incomplete.
-/// 
-/// ```
-/// use parser::{Parser, string};
-/// 
-/// let p = From::from(b"abcdef");
-/// 
-/// assert_eq!(string(p, b"abc").unwrap(), b"abc");
-/// ```
-#[cfg(not(feature = "verbose_error"))]
-#[inline]
-pub fn string<'a, I>(m: Input<'a, I>, s: &[I]) -> Parser<'a, I, &'a [I], Error<I>>
-  where I: Copy + Eq {
-    if s.len() > m.0.len() {
-        return Parser(State::Incomplete(s.len() - m.0.len()));
-    }
-
-    let d = &m.0[..s.len()];
-
-    for i in 0..s.len() {
-        if s[i] != d[i] {
-            return Parser(State::Error(&m.0[i..], Error::Unexpected));
+            return error::string::<I, &'a [I]>(m.0, i, s);
         }
     }
 

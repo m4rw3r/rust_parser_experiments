@@ -105,6 +105,9 @@ mod error {
     //! All adapters are #inline(always) and will construct the appropriate error type.
     use std::fmt;
 
+    use ::Parser;
+    use ::State;
+
     #[derive(Debug, Eq, PartialEq)]
     pub enum Error<I> {
         Expected(I),
@@ -124,15 +127,20 @@ mod error {
     }
 
     #[inline(always)]
+    pub fn unexpected<I>() -> Error<I> {
+        Error::Unexpected
+    }
+
+    #[inline(always)]
     pub fn expected<'a, I>(i: I) -> Error<I> {
         Error::Expected(i)
     }
 
 
     #[inline(always)]
-    pub fn string<I>(c: &[I]) -> Error<I>
+    pub fn string<'a, 'b, I, T>(buffer: &'a [I], _offset: usize, expected: &'b [I]) -> Parser<'a, I, T, Error<I>>
       where I: Copy {
-        Error::String(c.to_vec())
+        return Parser(State::Error(buffer, Error::String(expected.to_vec())));
     }
 }
 
@@ -144,19 +152,25 @@ mod error {
     //! All adapters are #inline(always), and will just noop the data.
     use std::marker::PhantomData;
 
-    #[derive(Debug, Eq, PartialEq)]
-    pub enum Error<I> {
-        Unexpected,
-        Many1(PhantomData<I>),
+    use ::Parser;
+    use ::State;
+
+    pub struct Error<I>(PhantomData<I>);
+
+    #[inline(always)]
+    pub fn unexpected<I>() -> Error<I> {
+        Error(PhantomData)
     }
 
     #[inline(always)]
     pub fn expected<'a, I>(_: I) -> Error<I> {
-        Error::Unexpected
+        Error(PhantomData)
     }
 
     #[inline(always)]
-    pub fn many1<'a, I>() -> Error<I> {
-        Error::Many1(PhantomData)
+    pub fn string<'a, 'b, I, T>(buffer: &'a [I], offset: usize, _expected: &'b [I]) -> Parser<'a, I, T, Error<I>>
+      where I: Copy {
+        // Parser(State::Error(&buffer[offset..], Error::Unexpected));
+        Parser::<I, T, Error<I>>(State::Error(&buffer[offset..], Error(PhantomData)))
     }
 }
