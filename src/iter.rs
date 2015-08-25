@@ -6,30 +6,33 @@ use ::{
     State,
 };
 
+/// Iterator used by ``many`` and ``many1``.
 pub struct Iter<'a, I, U, E, F>
   where I: 'a,
         F: FnMut(Input<'a, I>) -> Parser<'a, I, U, E> {
-    s: State<'a, I, (), E>,
-    f: F,
-    b: &'a [I],
-    u: PhantomData<U>,
+    state:  State<'a, I, (), E>,
+    parser: F,
+    buf:    &'a [I],
+    _u:     PhantomData<U>,
 }
 
 impl<'a, I: 'a + Copy, T, E, F> Iter<'a, I, T, E, F>
   where F: FnMut(Input<'a, I>) -> Parser<'a, I, T, E> {
     #[inline]
-    pub fn new(buffer: &'a [I], f: F) -> Iter<'a, I, T, E, F> {
+    pub fn new(buffer: &'a [I], parser: F) -> Iter<'a, I, T, E, F> {
         Iter{
-            s: State::Item(buffer, ()),
-            f: f,
-            b: buffer,
-            u: PhantomData,
+            state:  State::Item(buffer, ()),
+            parser: parser,
+            buf:    buffer,
+            _u:     PhantomData,
         }
     }
 
+    /// Destructures the iterator returning the position just after the last successful parse as
+    /// well as the state of the last attempt to parse data.
     #[inline]
     pub fn state(self) -> (&'a [I], State<'a, I, (), E>) {
-        (self.b, self.s)
+        (self.buf, self.state)
     }
 }
 
@@ -40,20 +43,20 @@ impl<'a, I, T, E, F> Iterator for Iter<'a, I, T, E, F>
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        match (self.f)(Input(self.b)) {
+        match (self.parser)(Input(self.buf)) {
             Parser(State::Item(b, v)) => {
-                self.b = b;
-                self.s = State::Item(b, ());
+                self.buf   = b;
+                self.state = State::Item(b, ());
 
                 Some(v)
             },
             Parser(State::Error(b, e)) => {
-                self.s = State::Error(b, e);
+                self.state = State::Error(b, e);
 
                 None
             },
             Parser(State::Incomplete(n)) => {
-                self.s = State::Incomplete(n);
+                self.state = State::Incomplete(n);
 
                 None
             },
