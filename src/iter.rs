@@ -6,11 +6,17 @@ use ::{
     State,
 };
 
+pub enum EndState<'a, I, E>
+  where I: 'a {
+    Error(&'a [I], E),
+    Incomplete(usize),
+}
+
 /// Iterator used by ``many`` and ``many1``.
 pub struct Iter<'a, I, U, E, F>
   where I: 'a,
         F: FnMut(Input<'a, I>) -> Parser<'a, I, U, E> {
-    state:  State<'a, I, (), E>,
+    state:  EndState<'a, I, E>,
     parser: F,
     buf:    &'a [I],
     _u:     PhantomData<U>,
@@ -21,7 +27,7 @@ impl<'a, I: 'a + Copy, T, E, F> Iter<'a, I, T, E, F>
     #[inline]
     pub fn new(buffer: &'a [I], parser: F) -> Iter<'a, I, T, E, F> {
         Iter{
-            state:  State::Item(buffer, ()),
+            state:  EndState::Incomplete(0),
             parser: parser,
             buf:    buffer,
             _u:     PhantomData,
@@ -31,7 +37,7 @@ impl<'a, I: 'a + Copy, T, E, F> Iter<'a, I, T, E, F>
     /// Destructures the iterator returning the position just after the last successful parse as
     /// well as the state of the last attempt to parse data.
     #[inline]
-    pub fn state(self) -> (&'a [I], State<'a, I, (), E>) {
+    pub fn end_state(self) -> (&'a [I], EndState<'a, I, E>) {
         (self.buf, self.state)
     }
 }
@@ -45,18 +51,17 @@ impl<'a, I, T, E, F> Iterator for Iter<'a, I, T, E, F>
     fn next(&mut self) -> Option<Self::Item> {
         match (self.parser)(Input(self.buf)) {
             Parser(State::Item(b, v)) => {
-                self.buf   = b;
-                self.state = State::Item(b, ());
+                self.buf = b;
 
                 Some(v)
             },
             Parser(State::Error(b, e)) => {
-                self.state = State::Error(b, e);
+                self.state = EndState::Error(b, e);
 
                 None
             },
             Parser(State::Incomplete(n)) => {
-                self.state = State::Incomplete(n);
+                self.state = EndState::Incomplete(n);
 
                 None
             },

@@ -4,7 +4,10 @@ use Input;
 use Parser;
 use State;
 
-use iter::Iter;
+use iter::{
+    Iter,
+    EndState,
+};
 
 /// Tries to match the parser ``f``, if ``f`` fails it tries ``g``. Returns the success value of
 /// the first match, otherwise the error of the last one if both fail.
@@ -62,14 +65,12 @@ pub fn many<'a, I, T, E, F, U>(m: Input<'a, I>, f: F) -> Parser<'a, I, T, E>
 
     let result: T = FromIterator::from_iter(iter.by_ref());
 
-    match iter.state() {
-        // We haven't read everything yet
-        (_, State::Item(_, _))    => Parser(State::Incomplete(1)),
+    match iter.end_state() {
         // Ok, last parser failed, we have iterated all.
         // Return remainder of buffer and the collected result
-        (b, State::Error(_, _))   => Parser(State::Item(b, result)),
+        (b, EndState::Error(_, _))   => Parser(State::Item(b, result)),
         // Nested parser incomplete, propagate
-        (_, State::Incomplete(n)) => Parser(State::Incomplete(n)),
+        (_, EndState::Incomplete(n)) => Parser(State::Incomplete(n)),
     }
 }
 
@@ -106,18 +107,15 @@ pub fn many1<'a, I, T, E, F, U>(m: Input<'a, I>, f: F) -> Parser<'a, I, T, E>
     let result: T = FromIterator::from_iter(iter.by_ref().inspect(|_| item = true ));
 
     if !item {
-        match iter.state() {
-            (_, State::Error(b, e))   => Parser(State::Error(b, e)),
-            (_, State::Incomplete(n)) => Parser(State::Incomplete(n)),
-            // Should only be possible to reach if next() is never called.
-            (_, State::Item(_, _))    => unreachable!(),
+        match iter.end_state() {
+            (_, EndState::Error(b, e))   => Parser(State::Error(b, e)),
+            (_, EndState::Incomplete(n)) => Parser(State::Incomplete(n)),
         }
     } else {
-        match iter.state() {
-            (b, State::Error(_, _))   => Parser(State::Item(b, result)),
+        match iter.end_state() {
+            (b, EndState::Error(_, _))   => Parser(State::Item(b, result)),
             // TODO: Indicate potentially more than 1?
-            (_, State::Item(_, _))    => Parser(State::Incomplete(1)),
-            (_, State::Incomplete(n)) => Parser(State::Incomplete(n)),
+            (_, EndState::Incomplete(n)) => Parser(State::Incomplete(n)),
         }
     }
 }
