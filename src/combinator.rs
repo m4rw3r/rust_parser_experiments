@@ -60,6 +60,7 @@ pub fn or<'a, I, T, E, F, G>(m: Input<'a, I>, f: F, g: G) -> Parser<'a, I, T, E>
 /// assert_eq!(v[0], b"a");
 /// assert_eq!(v[1], b"bc");
 /// ```
+#[cfg(not(feature = "verbose_error"))]
 #[inline]
 pub fn many<'a, I, T, E, F, U>(m: Input<'a, I>, f: F) -> Parser<'a, I, T, E>
   where I: Copy,
@@ -77,6 +78,48 @@ pub fn many<'a, I, T, E, F, U>(m: Input<'a, I>, f: F) -> Parser<'a, I, T, E>
         IResult::Bad        => Parser(State::Item(iter.buffer(), result)),
         // Nested parser incomplete, propagate
         IResult::Incomplete => Parser(State::Incomplete(1)),
+    }
+}
+
+/// Parses many instances of ``f`` until it does no longer match, returning all matches.
+/// 
+/// Note: If the last parser succeeds on the last input item then this parser is still considered
+/// incomplete as there might be more data to fill.
+/// 
+/// Note: Allocates data.
+/// 
+/// ```
+/// use parser::{Error, Parser, bind, char, many, ret, take_while1};
+/// 
+/// let p = From::from(b"a,bc,cd ");
+/// 
+/// let r: Parser<_, Vec<&[u8]>, Error<_>> = many(p, |m| bind(
+///     take_while1(m, |c| c != b',' && c != b' '), |m, c| bind(
+///         char(m, b','), |m, _| ret(m, c))));
+/// let v = r.unwrap();
+///
+/// assert_eq!(v.len(), 2);
+/// assert_eq!(v[0], b"a");
+/// assert_eq!(v[1], b"bc");
+/// ```
+#[cfg(feature = "verbose_error")]
+#[inline]
+pub fn many<'a, I, T, E, F, U>(m: Input<'a, I>, f: F) -> Parser<'a, I, T, E>
+  where I: Copy,
+        F: Fn(Input<'a, I>) -> Parser<'a, I, U, E>,
+        T: FromIterator<U> {
+    let mut iter = Iter::new(m.0, f);
+
+    let result: T = FromIterator::from_iter(iter.by_ref());
+
+    match iter.state() {
+        // We haven't read everything yet
+        (_, State::Item(_, _))    => Parser(State::Incomplete(1)),
+        // Ok, last parser failed, we have iterated all.
+        // Return remainder of buffer and the collected result
+        (b, State::Error(_, _))   => Parser(State::Item(b, result)),
+        // Nested parser incomplete, propagate
+        (_, State::Incomplete(n)) => Parser(State::Incomplete(n)),
     }
 }
 
@@ -140,7 +183,7 @@ pub fn many1<'a, I, T, E, F, U>(m: Input<'a, I>, f: F) -> Parser<'a, I, T, Error
 ///     take_while1(m, |c| c != b',' && c != b' '), |m, c| bind(
 ///         char(m, b','), |m, _| ret::<_, _, Error<_>>(m, c))));
 ///
-/// let _ = r.unwrap();
+/// let v = r.unwrap();
 /// ```
 // TODO: Proper checking of return value in doc-test
 #[cfg(feature = "verbose_error")]
@@ -149,22 +192,26 @@ pub fn many1<'a, I, T, E, F, U>(m: Input<'a, I>, f: F) -> Parser<'a, I, T, E>
   where I: Copy,
         F: Fn(Input<'a, I>) -> Parser<'a, I, U, E>,
         T: FromIterator<U> {
-    // If we have gotten an item, if this is false after from_iter we have failed
+    // If we managed to parse anything
     let mut item = false;
+    // If we have gotten an item, if this is false after from_iter we have failed
     let mut iter = Iter::new(m.0, f);
 
     let result: T = FromIterator::from_iter(iter.by_ref().inspect(|_| item = true ));
 
-    match (item, iter.last_state()) {
-        // We haven't read everything yet
-        (true,  IResult::Good)       => Parser(State::Incomplete(1)),
-        // Ok, last parser failed, we have iterated all
-        (true,  IResult::Bad)        => Parser(State::Item(iter.buffer(), result)),
-        // First parse failed, propagate error
-        (false, IResult::Bad)        => Parser(State::Error(iter.buffer(), iter.error().unwrap())),
-        // Should not be possible as long as next() is called
-        (false, IResult::Good)       => unreachable!(),
-        // Nested parser incomplete, propagate
-        (_,     IResult::Incomplete) => Parser(State::Incomplete(1)),
+    if !item {
+        match iter.state() {
+            (_, State::Error(b, e))   => Parser(State::Error(b, e)),
+            (_, State::Incomplete(n)) => Parser(State::Incomplete(n)),
+            // Should only be possible to reach if next() is never called.
+            (_, State::Item(_, _))    => unreachable!(),
+        }
+    } else {
+        match iter.state() {
+            (b, State::Error(_, _))   => Parser(State::Item(b, result)),
+            // TODO: Indicate potentially more than 1?
+            (_, State::Item(_, _))    => Parser(State::Incomplete(1)),
+            (_, State::Incomplete(n)) => Parser(State::Incomplete(n)),
+        }
     }
 }

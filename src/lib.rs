@@ -1,7 +1,7 @@
 mod mdo;
+mod iter;
 
 pub mod combinator;
-pub mod iter;
 pub mod monad;
 pub mod parser;
 
@@ -72,6 +72,28 @@ impl<'a, I, R> From<&'a R> for Input<'a, I>
         R: 'a + AsRef<[I]>{
     fn from(buf: &'a R) -> Input<'a, I> {
         Input(buf.as_ref())
+    }
+}
+
+pub struct Iter<'a, I, U, E, F>(iter::Iter<'a, I, U, E, F>)
+  where I: 'a,
+        F: FnMut(Input<'a, I>) -> Parser<'a, I, U, E>;
+
+impl<'a, I: 'a + Copy, T, E, F> Iter<'a, I, T, E, F>
+  where F: FnMut(Input<'a, I>) -> Parser<'a, I, T, E> {
+    #[inline]
+    pub fn new(buffer: &'a [I], f: F) -> Iter<'a, I, T, E, F> {
+        Iter(iter::Iter::new(buffer, f))
+    }
+}
+
+impl<'a, I: 'a + Copy, T, E, F> Iterator for Iter<'a, I, T, E, F>
+  where F: FnMut(Input<'a, I>) -> Parser<'a, I, T, E> {
+    type Item = T;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
     }
 }
 

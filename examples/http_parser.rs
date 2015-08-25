@@ -125,7 +125,7 @@ fn main() {
         let _ = file.read_to_end(&mut contents).unwrap();
     }
 
-    let i = parser::iter::Iter::new(&contents, request);
+    let i = parser::Iter::new(&contents, request);
 
     println!("num: {}", i.count());
 }
