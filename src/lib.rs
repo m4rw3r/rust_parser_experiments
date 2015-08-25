@@ -155,6 +155,7 @@ mod error {
     use ::Parser;
     use ::State;
 
+    #[derive(Debug, Eq, PartialEq)]
     pub struct Error<I>(PhantomData<I>);
 
     #[inline(always)]
