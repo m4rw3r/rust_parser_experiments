@@ -9,6 +9,41 @@ use iter::{
     EndState,
 };
 
+/// Applies the parser ``p`` exactly ``num`` times, propagating any error or incomplete state.
+/// 
+/// ```
+/// use parser::{Parser, count, char};
+/// 
+/// let p = From::from(b"aaa");
+/// 
+/// let r: Vec<u8> = count(p, 3, |m| char(m, b'a')).unwrap();
+/// 
+/// assert_eq!(r, [b'a', b'a', b'a']);
+/// ```
+#[inline]
+pub fn count<'a, I, T, E, F, U>(m: Input<'a, I>, num: usize, p: F) -> Parser<'a, I, T, E>
+  where I: Copy,
+        F: Fn(Input<'a, I>) -> Parser<'a, I, U, E>,
+        T: FromIterator<U> {
+    // If we have gotten an item, if this is false after from_iter we have failed
+    let mut count = 0;
+    let mut iter  = Iter::new(m.0, p);
+
+    let result: T      = FromIterator::from_iter(iter.by_ref().take(num).inspect(|_| count = count + 1 ));
+    let (buffer, last) = iter.end_state();
+
+    if count == num {
+        Parser(State::Item(buffer, result))
+    } else {
+        // Can only be less than num here since take() limits it.
+        // Just propagate the last state from the iterator.
+        match last {
+            EndState::Incomplete(n) => Parser(State::Incomplete(n)),
+            EndState::Error(b, e)   => Parser(State::Error(b, e)),
+        }
+    }
+}
+
 /// Tries to match the parser ``f``, if ``f`` fails it tries ``g``. Returns the success value of
 /// the first match, otherwise the error of the last one if both fail.
 /// 
