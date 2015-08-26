@@ -49,18 +49,18 @@ impl<'a, I, T, E, F> Iterator for Iter<'a, I, T, E, F>
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        match (self.parser)(Input(self.buf)) {
-            Parser(State::Item(b, v)) => {
+        match (self.parser)(Input(self.buf)).0 {
+            State::Item(b, v) => {
                 self.buf = b;
 
                 Some(v)
             },
-            Parser(State::Error(b, e)) => {
+            State::Error(b, e) => {
                 self.state = EndState::Error(b, e);
 
                 None
             },
-            Parser(State::Incomplete(n)) => {
+            State::Incomplete(n) => {
                 self.state = EndState::Incomplete(n);
 
                 None
