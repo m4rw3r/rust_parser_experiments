@@ -64,6 +64,7 @@ fn http_version<'a>(p: Input<'a, u8>) -> Parser<'a, u8, &'a [u8], Error<u8>> {
     }
 }
 
+#[inline(always)]
 fn request_line<'a>(p: Input<'a, u8>) -> Parser<'a, u8, Request<'a>, Error<u8>> {
     mdo!{p,
         method  = take_while1(is_token);
@@ -103,6 +104,7 @@ fn message_header<'a>(p: Input<'a, u8>) -> Parser<'a, u8, Header, Error<u8>> {
     }
 }
 
+#[inline(always)]
 fn request<'a>(p: Input<'a, u8>) -> Parser<'a, u8, (Request, Vec<Header>), Error<u8>> {
     mdo!{p,
         r = request_line;
