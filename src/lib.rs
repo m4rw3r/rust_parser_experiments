@@ -33,6 +33,7 @@ pub use parser::{
 pub use error::Error;
 
 #[derive(Debug, Eq, PartialEq)]
+#[must_use]
 enum State<'a, I, T, E>
   where I: 'a {
     /// Success state, slice is the slice of the input data starting just after the last successful
