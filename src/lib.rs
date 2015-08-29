@@ -53,6 +53,21 @@ pub struct Parser<'a, I, T, E>(State<'a, I, T, E>)
   where I: 'a;
 
 impl<'a, I, T, E> Parser<'a, I, T, E> {
+    /// Applies the function ``f`` on the value contained if the parser is in a success state.
+    /// 
+    /// ```
+    /// use parser::Parser;
+    /// use parser::ret;
+    /// 
+    /// let p: Parser<_, u32, ()> = ret(From::from(b"abc"), 1);
+    /// 
+    /// assert_eq!(p.map(|i| i + 2).unwrap(), 3);
+    /// ```
+    pub fn map<F, U>(self, f: F) -> Parser<'a, I, U, E>
+      where F: FnOnce(T) -> U {
+        bind(self, |m, t| ret(m, f(t)))
+    }
+
     pub fn unwrap(self) -> T {
         match self.0 {
             State::Item(_, t)    => t,
