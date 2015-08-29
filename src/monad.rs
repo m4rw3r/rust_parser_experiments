@@ -31,6 +31,11 @@ mod test {
     use ::Parser;
     use ::State;
 
+    /// Test for the left identity monad law.
+    /// 
+    /// ```text
+    /// return a >>= f ≡ f a
+    /// ```
     #[test]
     fn left_identity() {
         // Using different types here just to make sure it typechecks correctly
@@ -38,7 +43,7 @@ mod test {
             ret(m, (num + 1) as u64)
         }
 
-        let a  = 123;
+        let a = 123;
         let l = From::from(b"abc");
         let r = From::from(b"abc");
 
@@ -53,7 +58,7 @@ mod test {
 
     /// Test for right identity monad law.
     /// 
-    /// ```ignore
+    /// ```text
     /// m >>= return  ≡  m
     /// ```
     #[test]
@@ -71,7 +76,7 @@ mod test {
 
     /// Test for associativity monad law.
     /// 
-    /// ```ignore
+    /// ```text
     /// (m >>= f) >>= g  ≡  m >>= (\x -> f x >>= g)
     /// ```
     #[test]
