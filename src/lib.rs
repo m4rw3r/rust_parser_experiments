@@ -13,6 +13,7 @@ pub use monad::{
 
 pub use combinator::{
     count,
+    option,
     or,
     many,
     many1,

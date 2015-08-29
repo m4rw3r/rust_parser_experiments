@@ -44,6 +44,33 @@ pub fn count<'a, I, T, E, F, U>(m: Input<'a, I>, num: usize, p: F) -> Parser<'a,
     }
 }
 
+/// Tries the parser ``f``, on success it yields the parsed value, on failure ``default`` will be
+/// yielded instead.
+/// 
+/// Incomplete state is propagated.
+/// 
+/// ```
+/// use parser::{Input, Parser, option, char};
+/// 
+/// let p1: Input<u8> = From::from(b"abcd");
+/// let p2: Input<u8> = From::from(b"abcd");
+/// 
+/// assert_eq!(option(p1, |m| char(m, b'c'), b'z').unwrap(), b'z');
+/// assert_eq!(option(p2, |m| char(m, b'a'), b'z').unwrap(), b'a');
+/// ```
+#[inline]
+pub fn option<'a, I, T, E, F>(m: Input<'a, I>, f: F, default: T) -> Parser<'a, I, T, E>
+  where I: 'a + Copy,
+        F: FnOnce(Input<'a, I>) -> Parser<'a, I, T, E> {
+    let buf = m.0;
+
+    match f(Input(buf)).0 {
+        State::Item(b, t)    => Parser(State::Item(b, t)),
+        State::Error(_, _)   => Parser(State::Item(buf, default)),
+        State::Incomplete(n) => Parser(State::Incomplete(n)),
+    }
+}
+
 /// Tries to match the parser ``f``, if ``f`` fails it tries ``g``. Returns the success value of
 /// the first match, otherwise the error of the last one if both fail.
 /// 
