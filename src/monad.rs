@@ -2,7 +2,7 @@ use ::Parser;
 use ::Input;
 use ::State;
 
-pub fn bind<'a, I, T, E, F, U, V>(m: Parser<'a, I, T, E>, f: F) -> Parser<'a, I, U, V>
+pub fn bind<'a, I, T, E, F, U, V = E>(m: Parser<'a, I, T, E>, f: F) -> Parser<'a, I, U, V>
   where I: 'a,
         V: From<E>,
         F: FnOnce(Input<'a, I>, T) -> Parser<'a, I, U, V> {
