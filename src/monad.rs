@@ -114,7 +114,7 @@ pub fn err<'a, I, T, E>(m: Input<'a, I>, e: E) -> Parser<'a, I, T, E> {
 /// assert_eq!(p.unwrap(), "value");
 /// ```
 #[inline]
-pub fn ret<'a, I, T, E>(m: Input<'a, I>, t: T) -> Parser<'a, I, T, E> {
+pub fn ret<'a, I, T, E = Error<I>>(m: Input<'a, I>, t: T) -> Parser<'a, I, T, E> {
     Parser(State::Item(m.0, t))
 }
 
