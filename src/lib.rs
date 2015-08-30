@@ -1,6 +1,8 @@
 mod mdo;
 mod iter;
 
+use std::fmt;
+
 pub mod combinator;
 pub mod monad;
 pub mod parser;
@@ -67,14 +69,25 @@ impl<'a, I, T, E> Parser<'a, I, T, E> {
       where F: FnOnce(T) -> U {
         bind(self, |m, t| ret(m, f(t)))
     }
+}
 
+impl<'a, I, T, E> Parser<'a, I, T, E>
+  where T: fmt::Debug {
+    pub fn unwrap_err(self) -> E {
+        match self.0 {
+            State::Item(_, t)    => panic!("called `Parser::unwrap_err` on a parser in a success state: {:?}", t),
+            State::Error(_, e)   => e,
+            State::Incomplete(_) => panic!("called `Parser::unwrap_err` on a parser in an incomplete state"),
+        }
+    }
+}
+impl<'a, I, T, E> Parser<'a, I, T, E>
+  where E: fmt::Debug {
     pub fn unwrap(self) -> T {
         match self.0 {
             State::Item(_, t)    => t,
-            // TODO: Print error
-            State::Error(_, _)   => panic!("Parser is in error state"),
-            // TODO Print incomplete info
-            State::Incomplete(_) => panic!("Parser is in incomplete state"),
+            State::Error(_, e)   => panic!("called `Parser::unwrap` on a parser in an error state: {:?}", e),
+            State::Incomplete(_) => panic!("called `Parser::unwrap` on a parser in an incomplete state"),
         }
     }
 }
