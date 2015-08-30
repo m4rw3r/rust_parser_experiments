@@ -149,10 +149,10 @@ mod error {
     impl<I> fmt::Display for Error<I>
       where I: fmt::Debug {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            match self {
-                &Error::Expected(ref c) => write!(f, "expected {:?}", *c),
-                &Error::Unexpected      => write!(f, "unexpected"),
-                &Error::String(ref s)   => write!(f, "expected {:?}", *s),
+            match *self {
+                Error::Expected(ref c) => write!(f, "expected {:?}", *c),
+                Error::Unexpected      => write!(f, "unexpected"),
+                Error::String(ref s)   => write!(f, "expected {:?}", *s),
             }
         }
     }
