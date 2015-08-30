@@ -171,7 +171,7 @@ mod error {
     #[inline(always)]
     pub fn string<'a, 'b, I, T>(buffer: &'a [I], _offset: usize, expected: &'b [I]) -> Parser<'a, I, T, Error<I>>
       where I: Copy {
-        return Parser(State::Error(buffer, Error::String(expected.to_vec())));
+        Parser(State::Error(buffer, Error::String(expected.to_vec())))
     }
 }
 
