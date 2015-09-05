@@ -7,14 +7,6 @@ use error::Error;
 /// Matches any item, returning it if present.
 ///
 /// If the buffer length is 0 this parser is considered incomplete.
-///
-/// ```
-/// use parser::{Parser, any};
-///
-/// let p = any();
-///
-/// assert_eq!(p.parse(b"abc").unwrap(), b'a');
-/// ```
 #[inline]
 pub fn any<'a, I>() -> impl Parser<'a, I, I, Error<I>>
   where I: Copy {
@@ -27,14 +19,6 @@ pub fn any<'a, I>() -> impl Parser<'a, I, I, Error<I>>
 /// Matches a single character, returning the matched character on success.
 ///
 /// If the buffer length is 0 this parser is considered incomplete.
-///
-/// ```
-/// use parser::{Parser, char};
-///
-/// let p = char(b'a');
-///
-/// assert_eq!(p.parse(b"abc").unwrap(), b'a');
-/// ```
 #[inline]
 pub fn char<'a, 'p, I>(chr: I) -> impl Parser<'a, I, I, Error<I>> + 'p
   where I: Copy + Eq + 'p {
@@ -49,14 +33,6 @@ pub fn char<'a, 'p, I>(chr: I) -> impl Parser<'a, I, I, Error<I>> + 'p
 /// fails.
 ///
 /// If the buffer length is 0 this parser is considered incomplete.
-/// 
-/// ```
-/// use parser::{Parser, satisfy};
-/// 
-/// let p = satisfy(|c| c == b'a');
-/// 
-/// assert_eq!(p.parse(b"abc").unwrap(), b'a');
-/// ```
 #[inline]
 pub fn satisfy<'a, 'p, I, F>(f: F) -> impl Parser<'a, I, I, Error<I>> + 'p
   where I: Copy,
@@ -72,24 +48,6 @@ pub fn satisfy<'a, 'p, I, F>(f: F) -> impl Parser<'a, I, I, Error<I>> + 'p
 /// 
 /// If no failure can be found the parser will be considered to be incomplete as there might be
 /// more input which needs to be matched.
-/// 
-/// ```
-/// use parser::{Parser, take_while};
-///
-/// let p = take_while(|c| c == b'a' || c == b'b');
-///
-/// assert_eq!(p.parse(b"abcdcba").unwrap(), b"ab");
-/// ```
-/// 
-/// Without managing to match anything:
-/// 
-/// ```
-/// use parser::{Parser, take_while};
-///
-/// let p = take_while(|c| c == b'z');
-///
-/// assert_eq!(p.parse(b"abcdcba").unwrap(), b"");
-/// ```
 #[inline]
 pub fn take_while<'a, 'p, I, F>(f: F) -> impl Parser<'a, I, &'a [I], Error<I>> + 'p
   where I: Copy + 'a,
@@ -107,14 +65,6 @@ pub fn take_while<'a, 'p, I, F>(f: F) -> impl Parser<'a, I, &'a [I], Error<I>> +
 /// 
 /// If no failure can be found the parser will be considered to be incomplete as there might be
 /// more input which needs to be matched. If zero items were matched an error will be returned.
-///
-/// ```
-/// use parser::{Parser, take_while1};
-///
-/// let p = take_while1(|c| c == b'a' || c == b'b');
-///
-/// assert_eq!(p.parse(b"abcdcba").unwrap(), b"ab");
-/// ```
 #[inline]
 pub fn take_while1<'a, 'p, I, F>(f: F) -> impl Parser<'a, I, &'a [I], Error<I>> + 'p
   where I: Copy + 'a,
@@ -133,14 +83,6 @@ pub fn take_while1<'a, 'p, I, F>(f: F) -> impl Parser<'a, I, &'a [I], Error<I>> 
 /// 
 /// If no failure can be found the parser will be considered to be incomplete as there might be
 /// more input which needs to be matched.
-/// 
-/// ```
-/// use parser::{Parser, take_till};
-/// 
-/// let p = take_till(|c| c == b'd');
-/// 
-/// assert_eq!(p.parse(b"abcdef").unwrap(), b"abc");
-/// ```
 #[inline]
 pub fn take_till<'a, 'p, I, F>(f: F) -> impl Parser<'a, I, &'a [I], Error<I>> + 'p
   where I: Copy + 'a,
@@ -157,14 +99,6 @@ pub fn take_till<'a, 'p, I, F>(f: F) -> impl Parser<'a, I, &'a [I], Error<I>> + 
 /// 
 /// If the length of the contained data is shorter than the given slice this parser is considered
 /// incomplete.
-/// 
-/// ```
-/// use parser::{Parser, string};
-/// 
-/// let p = string(b"abc");
-/// 
-/// assert_eq!(p.parse(b"abcdef").unwrap(), b"abc");
-/// ```
 #[inline]
 pub fn string<'a, 'p, I>(s: &'p [I]) -> impl Parser<'a, I, &'a [I], Error<I>> + 'p
   where I: Copy + Eq + 'a {
@@ -183,4 +117,79 @@ pub fn string<'a, 'p, I>(s: &'p [I]) -> impl Parser<'a, I, &'a [I], Error<I>> + 
 
         State::Item(&i[s.len()..], d)
     })
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn any() {
+        use ::{Parser, any};
+
+        let p = any();
+
+        assert_eq!(p.parse(b"abc").unwrap(), b'a');
+    }
+
+    #[test]
+    fn char() {
+        use ::{Parser, char};
+
+        let p = char(b'a');
+
+        assert_eq!(p.parse(b"abc").unwrap(), b'a');
+    }
+
+    #[test]
+    fn satisfy() {
+        use ::{Parser, satisfy};
+
+        let p = satisfy(|c| c == b'a');
+
+        assert_eq!(p.parse(b"abc").unwrap(), b'a');
+    }
+
+    #[test]
+    fn take_while_0() {
+        use ::{Parser, take_while};
+
+        let p = take_while(|c| c == b'a' || c == b'b');
+
+        assert_eq!(p.parse(b"abcdcba").unwrap(), b"ab");
+    }
+
+    #[test]
+    fn take_while_1() {
+        use ::{Parser, take_while};
+
+        let p = take_while(|c| c == b'z');
+
+        assert_eq!(p.parse(b"abcdcba").unwrap(), b"");
+    }
+
+    #[test]
+    fn take_while1() {
+        use ::{Parser, take_while1};
+
+        let p = take_while1(|c| c == b'a' || c == b'b');
+
+        assert_eq!(p.parse(b"abcdcba").unwrap(), b"ab");
+    }
+    
+    #[test]
+    fn take_till() {
+        use ::{Parser, take_till};
+
+        let p = take_till(|c| c == b'd');
+
+        assert_eq!(p.parse(b"abcdef").unwrap(), b"abc");
+    }
+
+    #[test]
+    fn string() {
+        use ::{Parser, string};
+
+        let p = string(b"abc");
+
+        assert_eq!(p.parse(b"abcdef").unwrap(), b"abc");
+    }
 }
