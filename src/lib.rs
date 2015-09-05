@@ -1,35 +1,20 @@
 #![feature(default_type_parameter_fallback)]
 
-// pub type Parser<I, T, E> = for<'a>FnOnce(&'a [I]) -> State<'a, I, T, E>;
-
 pub trait Parser<I, T, E> {
-    fn parse<'a>(&self, &'a [I]) -> State<'a, I, T, E>;
-}
-
-impl<I, T, E> Parser<I, T, E> for for<'p>FnOnce(&'p [I]) -> State<'p, I, T, E> {
-    fn parse<'a>(&self, i: &'a [I]) -> State<'a, I, T, E> {
-        self(i)
-    }
-}
-
-/*
-trait Parser<'a, I, T, E> {
-    fn parse(self, &'a [I]) -> State<'a, I, T, E>;
+    fn parse<'a>(self, &'a [I]) -> State<'a, I, T, E>;
 }
 
 impl<I, T, E, F> Parser<I, T, E> for F
-  where F: for<'a> Fn(&'a [I]) -> State<'a, I, T, E> {
-    fn parse<'a>(&self, i: &'a [I]) -> State<'a, I, T, E> {
+  where F: for<'p>FnOnce(&'p [I]) -> State<'p, I, T, E> {
+    fn parse<'a>(self, i: &'a [I]) -> State<'a, I, T, E> {
         self(i)
     }
 }
 
-impl<I, T, E, F> Parser<I, T, E> for F
-  where F: for<'a> FnMut(&'a [I]) -> State<'a, I, T, E> {
-    fn parse<'a>(&self, i: &'a [I]) -> State<'a, I, T, E> {
-        self(i)
-    }
-}*/
+fn parser<'a, I, T, E, F>(p: F) -> impl Parser<I, T, E> + 'a
+  where F: for<'p>FnOnce(&'p [I]) -> State<'p, I, T, E> + 'a {
+    p
+}
 
 #[derive(Debug, Eq, PartialEq)]
 #[must_use]
@@ -49,33 +34,34 @@ pub enum State<'a, I, T, E>
 pub mod monad {
     use ::Parser;
     use ::State;
+    use ::parser;
 
     pub fn bind<'a, I, P, T, E, F, U, R, V = E>(p: P, f: F) -> impl Parser<I, U, V> + 'a
       where P: Parser<I, T, E> + 'a,
             F: FnOnce(T) -> R + 'a,
             R: Parser<I, U, V>,
             V: From<E> {
-        move |i| {
+        parser(move |i| {
             match p.parse(i) {
                 State::Item(b, t)    => f(t).parse(b),
                 State::Error(b, e)   => State::Error(b, From::from(e)),
                 State::Incomplete(n) => State::Incomplete(n),
             }
-        }
+        })
     }
 
     pub fn ret<'a, I, T, E = ()>(a: T) -> impl Parser<I, T, E>+ 'a
       where T: 'a {
-        move |i| {
+        parser(move |i| {
             State::Item(i, a)
-        }
+        })
     }
 
     pub fn err<'a, I, T, E>(e: E) -> impl Parser<I, T, E> + 'a
       where E: 'a {
-        move |i| {
+        parser(move |i| {
             State::Error(i, e)
-        }
+        })
     }
 
     #[cfg(test)]
