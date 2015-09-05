@@ -1,18 +1,24 @@
 #![feature(default_type_parameter_fallback)]
 
-pub trait Parser<I, T, E> {
-    fn parse<'a>(self, &'a [I]) -> State<'a, I, T, E>;
+pub mod monad;
+pub mod parsers;
+
+pub trait Parser<'a, I, T, E> {
+    fn parse(self, &'a [I]) -> State<'a, I, T, E>;
 }
 
-impl<I, T, E, F> Parser<I, T, E> for F
-  where F: for<'p>FnOnce(&'p [I]) -> State<'p, I, T, E> {
-    fn parse<'a>(self, i: &'a [I]) -> State<'a, I, T, E> {
+impl<'a, I, T, E, F> Parser<'a, I, T, E> for F
+  where F: FnOnce(&'a [I]) -> State<'a, I, T, E> {
+    fn parse(self, i: &'a [I]) -> State<'a, I, T, E> {
         self(i)
     }
 }
 
-fn parser<'a, I, T, E, F>(p: F) -> impl Parser<I, T, E> + 'a
-  where F: for<'p>FnOnce(&'p [I]) -> State<'p, I, T, E> + 'a {
+/// Constructs a parser from a closure.
+/// 
+/// This function is necessary for inference at time.
+fn parser<'a, 'p, I, T, E, F>(p: F) -> impl Parser<'a, I, T, E> + 'p
+  where F: FnOnce(&'a [I]) -> State<'a, I, T, E> + 'p {
     p
 }
 
@@ -31,94 +37,78 @@ pub enum State<'a, I, T, E>
     Incomplete(usize),
 }
 
-pub mod monad {
-    use ::Parser;
+#[cfg(feature = "verbose_error")]
+mod error {
+    //! This is a private module to contain the more verbose error type as well as adapters for
+    //! using it.
+    //! 
+    //! All adapters are #inline(always) and will construct the appropriate error type.
+    use std::fmt;
+
     use ::State;
-    use ::parser;
 
-    pub fn bind<'a, I, P, T, E, F, U, R, V = E>(p: P, f: F) -> impl Parser<I, U, V> + 'a
-      where P: Parser<I, T, E> + 'a,
-            F: FnOnce(T) -> R + 'a,
-            R: Parser<I, U, V>,
-            V: From<E> {
-        parser(move |i| {
-            match p.parse(i) {
-                State::Item(b, t)    => f(t).parse(b),
-                State::Error(b, e)   => State::Error(b, From::from(e)),
-                State::Incomplete(n) => State::Incomplete(n),
-            }
-        })
+    #[derive(Debug, Eq, PartialEq)]
+    pub enum Error<I> {
+        Expected(I),
+        Unexpected,
+        String(Vec<I>),
     }
 
-    pub fn ret<'a, I, T, E = ()>(a: T) -> impl Parser<I, T, E>+ 'a
-      where T: 'a {
-        parser(move |i| {
-            State::Item(i, a)
-        })
+    impl<I> fmt::Display for Error<I>
+      where I: fmt::Debug {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            match *self {
+                Error::Expected(ref c) => write!(f, "expected {:?}", *c),
+                Error::Unexpected      => write!(f, "unexpected"),
+                Error::String(ref s)   => write!(f, "expected {:?}", *s),
+            }
+        }
     }
 
-    pub fn err<'a, I, T, E>(e: E) -> impl Parser<I, T, E> + 'a
-      where E: 'a {
-        parser(move |i| {
-            State::Error(i, e)
-        })
+    #[inline(always)]
+    pub fn unexpected<I>() -> Error<I> {
+        Error::Unexpected
     }
 
-    #[cfg(test)]
-    mod test {
-        use ::Parser;
-        use ::State;
-        use ::monad::{bind, ret, err};
+    #[inline(always)]
+    pub fn expected<'a, I>(i: I) -> Error<I> {
+        Error::Expected(i)
+    }
 
-        #[test]
-        fn left_identity() {
-            fn f<I>(i: u32) -> impl Parser<I, u32, ()>
-              where I: Copy {
-                ret(i + 1)
-            }
 
-            let a = 123;
-            // return a >>= f
-            let lhs = bind(ret(a), f);
-            // f a
-            let rhs = f(a);
+    #[inline(always)]
+    pub fn string<'a, 'b, I, T>(buffer: &'a [I], _offset: usize, expected: &'b [I]) -> State<'a, I, T, Error<I>>
+      where I: Copy {
+        State::Error(buffer, Error::String(expected.to_vec()))
+    }
+}
 
-            assert_eq!(lhs.parse(b"test"), State::Item(&b"test"[..], 124));
-            assert_eq!(rhs.parse(b"test"), State::Item(&b"test"[..], 124));
-        }
+#[cfg(not(feature = "verbose_error"))]
+mod error {
+    //! This is a private module to contain the smaller error type as well as adapters for using
+    //! it.
+    //! 
+    //! All adapters are #inline(always), and will just noop the data.
+    use std::marker::PhantomData;
 
-        #[test]
-        fn right_identity() {
-            let m1 = ret::<_, usize, ()>(1);
-            let m2 = ret::<_, usize, ()>(1);
+    use ::State;
 
-            let lhs = bind(m1, ret);
-            let rhs = m2;
+    #[derive(Debug, Eq, PartialEq)]
+    pub struct Error<I>(PhantomData<I>);
 
-            assert_eq!(lhs.parse(b"test"), State::Item(&b"test"[..], 1));
-            assert_eq!(rhs.parse(b"test"), State::Item(&b"test"[..], 1));
-        }
-        
-        #[test]
-        fn associativity() {
-             fn f<I: Copy>(num: u32) -> impl Parser<I, u64, ()> {
-                ret((num + 1) as u64)
-            }
+    #[inline(always)]
+    pub fn unexpected<I>() -> Error<I> {
+        Error(PhantomData)
+    }
 
-            fn g<I: Copy>(num: u64) -> impl Parser<I, u64, ()> {
-                ret(num * 2)
-            }
+    #[inline(always)]
+    pub fn expected<'a, I>(_: I) -> Error<I> {
+        Error(PhantomData)
+    }
 
-            let lhs_m = ret::<_, _, ()>(2);
-            let rhs_m = ret::<_, _, ()>(2);
-
-            // (m >>= f) >>= g
-            let lhs = bind(bind(lhs_m, f), g);
-            // m >>= (\x -> f x >> g)
-            let rhs = bind(rhs_m, |x| bind(f(x), g));
-
-            assert_eq!(lhs.parse(b"test"), State::Item(&b"test"[..], 6));
-            assert_eq!(rhs.parse(b"test"), State::Item(&b"test"[..], 6));
-        }
+    #[inline(always)]
+    pub fn string<'a, 'b, I, T>(buffer: &'a [I], offset: usize, _expected: &'b [I]) -> State<'a, I, T, Error<I>>
+      where I: Copy {
+        State::Error(&buffer[offset..], Error(PhantomData))
     }
 }
