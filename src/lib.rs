@@ -1,6 +1,16 @@
 #![feature(default_type_parameter_fallback)]
 
-// pub type Parser<I, T, E> = for<'a> FnOnce(&'a [I]) -> State<'a, I, T, E>;
+// pub type Parser<I, T, E> = for<'a>FnOnce(&'a [I]) -> State<'a, I, T, E>;
+
+pub trait Parser<I, T, E> {
+    fn parse<'a>(&self, &'a [I]) -> State<'a, I, T, E>;
+}
+
+impl<I, T, E> Parser<I, T, E> for for<'p>FnOnce(&'p [I]) -> State<'p, I, T, E> {
+    fn parse<'a>(&self, i: &'a [I]) -> State<'a, I, T, E> {
+        self(i)
+    }
+}
 
 /*
 trait Parser<'a, I, T, E> {
@@ -40,28 +50,28 @@ pub mod monad {
     use ::Parser;
     use ::State;
 
-    pub fn bind<'a, I, P, T, E, F, U, R, V = E>(p: P, f: F) -> impl for<'p>FnOnce(&'p [I]) -> State<'p, I, U, V> + 'a
-      where P: for<'p>FnOnce(&'p [I]) -> State<'p, I, T, E> + 'a,
+    pub fn bind<'a, I, P, T, E, F, U, R, V = E>(p: P, f: F) -> impl Parser<I, U, V> + 'a
+      where P: Parser<I, T, E> + 'a,
             F: FnOnce(T) -> R + 'a,
-            R: for<'p>FnOnce(&'p [I]) -> State<'p, I, U, V>,
+            R: Parser<I, U, V>,
             V: From<E> {
         move |i| {
-            match p(i) {
-                State::Item(b, t)    => f(t)(b),
+            match p.parse(i) {
+                State::Item(b, t)    => f(t).parse(b),
                 State::Error(b, e)   => State::Error(b, From::from(e)),
                 State::Incomplete(n) => State::Incomplete(n),
             }
         }
     }
 
-    pub fn ret<'a, I, T, E = ()>(a: T) -> impl for<'p>FnOnce(&'p [I]) -> State<'p, I, T, E> + 'a
+    pub fn ret<'a, I, T, E = ()>(a: T) -> impl Parser<I, T, E>+ 'a
       where T: 'a {
         move |i| {
             State::Item(i, a)
         }
     }
 
-    pub fn err<'a, I, T, E>(e: E) -> impl for<'p>FnOnce(&'p [I]) -> State<'p, I, T, E> + 'a
+    pub fn err<'a, I, T, E>(e: E) -> impl Parser<I, T, E> + 'a
       where E: 'a {
         move |i| {
             State::Error(i, e)
@@ -70,12 +80,13 @@ pub mod monad {
 
     #[cfg(test)]
     mod test {
+        use ::Parser;
         use ::State;
         use ::monad::{bind, ret, err};
 
         #[test]
         fn left_identity() {
-            fn f<I>(i: u32) -> impl for<'p> FnOnce(&'p [I]) -> State<'p, I, u32, ()>
+            fn f<I>(i: u32) -> impl Parser<I, u32, ()>
               where I: Copy {
                 ret(i + 1)
             }
@@ -86,8 +97,8 @@ pub mod monad {
             // f a
             let rhs = f(a);
 
-            assert_eq!(lhs(b"test"), State::Item(&b"test"[..], 124));
-            assert_eq!(rhs(b"test"), State::Item(&b"test"[..], 124));
+            assert_eq!(lhs.parse(b"test"), State::Item(&b"test"[..], 124));
+            assert_eq!(rhs.parse(b"test"), State::Item(&b"test"[..], 124));
         }
 
         #[test]
@@ -98,17 +109,17 @@ pub mod monad {
             let lhs = bind(m1, ret);
             let rhs = m2;
 
-            assert_eq!(lhs(b"test"), State::Item(&b"test"[..], 1));
-            assert_eq!(rhs(b"test"), State::Item(&b"test"[..], 1));
+            assert_eq!(lhs.parse(b"test"), State::Item(&b"test"[..], 1));
+            assert_eq!(rhs.parse(b"test"), State::Item(&b"test"[..], 1));
         }
         
         #[test]
         fn associativity() {
-             fn f<I: Copy>(num: u32) -> impl for<'p> FnOnce(&'p [I]) -> State<'p, I, u64, ()> {
+             fn f<I: Copy>(num: u32) -> impl Parser<I, u64, ()> {
                 ret((num + 1) as u64)
             }
 
-            fn g<I: Copy>(num: u64) -> impl for<'p> FnOnce(&'p [I]) -> State<'p, I, u64, ()> {
+            fn g<I: Copy>(num: u64) -> impl Parser<I, u64, ()> {
                 ret(num * 2)
             }
 
@@ -120,8 +131,8 @@ pub mod monad {
             // m >>= (\x -> f x >> g)
             let rhs = bind(rhs_m, |x| bind(f(x), g));
 
-            assert_eq!(lhs(b"test"), State::Item(&b"test"[..], 6));
-            assert_eq!(rhs(b"test"), State::Item(&b"test"[..], 6));
+            assert_eq!(lhs.parse(b"test"), State::Item(&b"test"[..], 6));
+            assert_eq!(rhs.parse(b"test"), State::Item(&b"test"[..], 6));
         }
     }
 }
