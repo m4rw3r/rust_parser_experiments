@@ -1,7 +1,28 @@
 #![feature(default_type_parameter_fallback)]
 
+use std::fmt;
+
 pub mod monad;
 pub mod parsers;
+pub mod mdo;
+
+pub use monad::{
+    bind,
+    ret,
+    err,
+};
+
+pub use parsers::{
+    any,
+    char,
+    satisfy,
+    take_while,
+    take_while1,
+    take_till,
+    string,
+};
+
+pub use error::Error;
 
 pub trait Parser<'a, I, T, E> {
     fn parse(self, &'a [I]) -> State<'a, I, T, E>;
@@ -35,6 +56,28 @@ pub enum State<'a, I, T, E>
     // Do not include data-slice here as we do not need to actually return the part which is
     // incomplete. The parse has to restart anyway from the index where it was.
     Incomplete(usize),
+}
+
+impl<'a, I, T, E> State<'a, I, T, E>
+  where T: fmt::Debug {
+    pub fn unwrap_err(self) -> E {
+        match self {
+            State::Item(_, t)    => panic!("called `Parser::unwrap_err` on a parser in a success state: {:?}", t),
+            State::Error(_, e)   => e,
+            State::Incomplete(_) => panic!("called `Parser::unwrap_err` on a parser in an incomplete state"),
+        }
+    }
+}
+
+impl<'a, I, T, E> State<'a, I, T, E>
+  where E: fmt::Debug {
+    pub fn unwrap(self) -> T {
+        match self {
+            State::Item(_, t)    => t,
+            State::Error(_, e)   => panic!("called `Parser::unwrap` on a parser in an error state: {:?}", e),
+            State::Incomplete(_) => panic!("called `Parser::unwrap` on a parser in an incomplete state"),
+        }
+    }
 }
 
 #[cfg(feature = "verbose_error")]
