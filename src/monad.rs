@@ -1,7 +1,9 @@
 use ::Parser;
 use ::State;
+use ::Error;
 use ::parser;
 
+#[inline]
 pub fn bind<'a, 'p, I, P, T, E, F, U, R, V = E>(p: P, f: F) -> impl Parser<'a, I, U, V> + 'p
   where P: Parser<'a, I, T, E> + 'p,
         F: FnOnce(T) -> R + 'p,
@@ -16,13 +18,15 @@ pub fn bind<'a, 'p, I, P, T, E, F, U, R, V = E>(p: P, f: F) -> impl Parser<'a, I
     })
 }
 
-pub fn ret<'a, 'p, I, T, E = ()>(a: T) -> impl Parser<'a, I, T, E> + 'p
+#[inline]
+pub fn ret<'a, 'p, I, T, E = Error<I>>(a: T) -> impl Parser<'a, I, T, E> + 'p
   where T: 'p {
     parser(move |i| {
         State::Item(i, a)
     })
 }
 
+#[inline]
 pub fn err<'a, 'p, I, T, E>(e: E) -> impl Parser<'a, I, T, E> + 'p
   where E: 'p {
     parser(move |i| {
@@ -34,7 +38,7 @@ pub fn err<'a, 'p, I, T, E>(e: E) -> impl Parser<'a, I, T, E> + 'p
 mod test {
     use ::Parser;
     use ::State;
-    use ::monad::{bind, ret, err};
+    use ::monad::{bind, ret};
 
     #[test]
     fn left_identity() {
@@ -58,7 +62,7 @@ mod test {
         let m1 = ret::<_, usize, ()>(1);
         let m2 = ret::<_, usize, ()>(1);
 
-        let lhs = bind(m1, ret);
+        let lhs = bind(m1, ret::<_, _, ()>);
         let rhs = m2;
 
         assert_eq!(lhs.parse(b"test"), State::Item(&b"test"[..], 1));
