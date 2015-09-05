@@ -2,6 +2,9 @@
 
 use std::fmt;
 
+mod iter;
+
+pub mod combinators;
 pub mod monad;
 pub mod parsers;
 pub mod mdo;
@@ -10,6 +13,14 @@ pub use monad::{
     bind,
     ret,
     err,
+};
+
+pub use combinators::{
+    count,
+    option,
+    or,
+    many,
+    many1,
 };
 
 pub use parsers::{
