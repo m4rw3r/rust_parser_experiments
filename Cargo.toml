@@ -3,6 +3,10 @@ name = "parser"
 version = "0.0.1"
 authors = ["Martin Wernstål <m4rw3r@gmail.com>"]
 
+[[bin]]
+name = "http_parser"
+path = "src/main.rs"
+
 [features]
 default = ["verbose_error"]
 
